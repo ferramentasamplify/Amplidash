@@ -414,6 +414,20 @@ img {
   text-overflow: ellipsis;
 }
 
+.field-inline select option,
+.field select option,
+.field-inline select optgroup,
+.field select optgroup {
+  color: var(--brand-ink);
+  background: var(--brand-white);
+}
+
+.field-inline select option:checked,
+.field select option:checked {
+  color: var(--brand-ink);
+  background: #d7f8d2;
+}
+
 .field-inline input[type="date"] {
   padding-right: 46px;
 }

@@ -1,5 +1,4 @@
 import {
-  ATTRIBUTION_OPTIONS,
   COMPARISON_OPTIONS,
   DATE_PRESET_OPTIONS,
   WEEKLY_GOAL_METRICS,
@@ -61,7 +60,6 @@ function init() {
 
 function populateControls() {
   populateSelect($('#date-preset-select'), DATE_PRESET_OPTIONS);
-  populateSelect($('#attribution-select'), ATTRIBUTION_OPTIONS);
   populateSelect($('#comparison-select'), COMPARISON_OPTIONS);
 }
 
@@ -76,8 +74,6 @@ function syncControls() {
   const presetEl = $('#date-preset-select');
   if (!presetEl) return;
   presetEl.value = state.filters.preset;
-  const attrEl = $('#attribution-select');
-  if (attrEl) attrEl.value = state.filters.attribution;
   const compEl = $('#comparison-select');
   if (compEl) compEl.value = state.filters.comparison;
   const csEl = $('#custom-range-start');
@@ -122,11 +118,6 @@ function bindEvents() {
   $('#custom-range-end')?.addEventListener('change', (event) => {
     state.filters.customEnd = event.target.value;
     maybeRefreshCustomRange();
-  });
-
-  $('#attribution-select')?.addEventListener('change', (event) => {
-    state.filters.attribution = event.target.value;
-    refreshSnapshot();
   });
 
   $('#comparison-select')?.addEventListener('change', (event) => {
@@ -296,15 +287,13 @@ function syncModuleSelections() {
 function renderControlMeta() {
   const { period } = state.snapshot;
   const el = $('#active-period-label');
-  if (!el) return;
-
-  el.textContent = `${period.label} · ${period.absoluteLabel}`;
+  if (el) el.textContent = `${period.label} · ${period.absoluteLabel}`;
   const copy = $('#active-period-copy');
-  if (copy) copy.textContent = `${period.attributionLabel} · ${period.comparisonLabel} · ${period.granularityLabel}`;
+  if (copy) copy.textContent = `${period.comparisonLabel} · ${period.granularityLabel}`;
   const badge = $('#granularity-badge');
   if (badge) badge.textContent = period.granularityLabel;
   const pill = $('#hero-period-pill');
-  if (pill) pill.textContent = `${period.label} · ${period.attributionLabel}`;
+  if (pill) pill.textContent = period.label;
 }
 
 function renderHero() {
@@ -1248,7 +1237,6 @@ async function handleCopySummary() {
   const summary = [
     `Amplify Creator Hub · ${creator.fullName}`,
     `Período: ${period.label} (${period.absoluteLabel})`,
-    `Atribuição: ${period.attributionLabel}`,
     `Comparação: ${period.comparisonLabel}`,
     `Impressões: ${formatMetricValue(metrics.impressions.format, metrics.impressions.value)}`,
     `Cliques: ${formatMetricValue(metrics.clicks.format, metrics.clicks.value)}`,

@@ -24,6 +24,15 @@ const dashCriadorHtmlAliases = new Set([
   '/src/dash_criador/index.html',
 ]);
 
+const okrHtmlAliases = new Set([
+  '/okr',
+  '/okr/',
+  '/okr/index.html',
+  '/src/okr',
+  '/src/okr/',
+  '/src/okr/index.html',
+]);
+
 async function readJsonBody(req) {
   const chunks = [];
 
@@ -69,6 +78,10 @@ export default defineConfig({
             req.url = `/dash_criador/index.html${search ? `?${search}` : ''}`;
           }
 
+          if (req.method === 'GET' && okrHtmlAliases.has(pathname)) {
+            req.url = `/okr/index.html${search ? `?${search}` : ''}`;
+          }
+
           if (req.method === 'OPTIONS' && pathname.startsWith('/api/melhores/')) {
             sendJson(res, {
               status: 204,
@@ -110,6 +123,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         melhores: resolve(__dirname, 'melhores/index.html'),
         dash_criador: resolve(__dirname, 'dash_criador/index.html'),
+        okr: resolve(__dirname, 'okr/index.html'),
       }
     }
   }

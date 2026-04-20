@@ -6,7 +6,8 @@
  * 2. REFERRALS sheet (gid=1587650016): Individual referral rows with dates
  *
  * Referrals are counted dynamically based on the selected time window,
- * using column L (date DD/MM/YYYY) from the referrals sheet.
+ * using column M (date DD/MM/YYYY) from the referrals sheet.
+ * Only rows with column N (Agenciado) marked as "Sim" are counted.
  */
 
 import { calculateScore } from './utils.js';
@@ -116,6 +117,18 @@ function parseDateDDMMYYYY(str) {
     return null;
 }
 
+function normalizeText(str) {
+    return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+}
+
+function isMarkedYes(str) {
+    return normalizeText(str) === 'sim';
+}
+
 // ==================================================================
 // SUMMARY SHEET PARSER
 // ==================================================================
@@ -165,16 +178,23 @@ function parseSummaryCSV(csv) {
  * Parse the referrals CSV into an array of { utmSource, date }
  * Column J (index 9) = UTM_Source (who referred)
  * Column M (index 12) = Date DD/MM/YYYY
+ * Column N (index 13) = Agenciado ("Sim" / "Não")
  */
 function parseReferralsCSV(csv) {
     const rows = parseCSV(csv);
     if (rows.length < 2) return [];
 
+    const headers = rows[0].map(h => normalizeText(h));
+    const agenciadoIndex = headers.findIndex(h => h.includes('agenciado'));
+    const agenciadoColumn = agenciadoIndex >= 0 ? agenciadoIndex : 13;
     const entries = [];
 
     for (let i = 1; i < rows.length; i++) {
         const cols = rows[i];
-        if (cols.length < 13) continue; // skip incomplete rows
+        if (cols.length <= agenciadoColumn) continue; // skip incomplete rows
+
+        // Only count referrals that actually became agenciados.
+        if (!isMarkedYes(cols[agenciadoColumn])) continue;
 
         // UTM_Source is column J (index 9)
         const utmSource = (cols[9] || '').trim().toLowerCase();

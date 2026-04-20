@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amplify | Growth Q2 OKR Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Work+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/src/okr/css/styles.css" />
+</head>
+<body>
+  
+  <div class="deck-container">
+    
+    <!-- Controls -->
+    <button class="nav-btn prev-btn" onclick="prevSlide()"><i data-lucide="chevron-left"></i></button>
+    <button class="nav-btn next-btn" onclick="nextSlide()"><i data-lucide="chevron-right"></i></button>
+
+    <div class="deck-progress">
+      <div class="deck-progress-bar" id="progressBar"></div>
+    </div>
+    
+    <div class="slide-counter" id="slideCounter">1 / 13</div>
+
+    <div class="slides-wrapper" id="slidesWrapper">
+      
+      <!-- 1. HERO -->
+      <section class="slide">
+        <div class="slide-content center-content">
+          <span class="slide-badge">Planejamento Estratégico Q2</span>
+          <h1 class="hero-headline">De operação descentralizada para<br><span class="text-gold">máquina de crescimento e performance.</span></h1>
+          <p class="hero-subheadline">Transformando Creators, Casa de Lives e TikTok Shop em produtos rentáveis, trackeados e previsíveis.</p>
+        </div>
+      </section>
+
+      <!-- 2. CONTEXTO ATUAL -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="alert-triangle"></i> Contexto Atual</h2>
+          <div class="context-grid">
+            <div class="context-card hoverable">
+              <h3>Dependência de Canais</h3>
+              <p>Mídia paga (Ads) sustenta grande parte da aquisição, precisando de diversificação (Comunidade e Canais Orgânicos) para blindar o CPL.</p>
+            </div>
+            <div class="context-card hoverable">
+              <h3>Falta de Visibilidade (Tracking)</h3>
+              <p>Necessidade de trackear ponta-a-ponta a origem do lead, custo, conversão e retorno geral por cada vertical (Campanhas, Captação, Casa de Lives).</p>
+            </div>
+            <div class="context-card hoverable">
+              <h3>Produto de TT Shop Imaturo</h3>
+              <p>Ainda falta clareza de escopo, precificação estruturada e um playbook operacional de performance do GMV Max.</p>
+            </div>
+            <div class="context-card hoverable">
+              <h3>Autonomia Analítica</h3>
+              <p>Creators atuam muito na intuição. Falta clareza de métricas, performance e tomada de decisão fundamentada em dados (Growth para criadoras).</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. TESE DE GROWTH -->
+      <section class="slide">
+        <div class="slide-content center-content">
+          <h2 class="slide-title"><i data-lucide="zap"></i> Tese de Growth</h2>
+          <p class="thesis-text">"Aquisição em escala só é rentável com tracking 360º e um produto final maduro."</p>
+          
+          <div class="thesis-flow">
+            <div class="tf-node">1. Aquisição Qualificada<br><small>(Ads + Comunidades)</small></div>
+            <div class="tf-arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="tf-node">2. Capacitação<br><small>(Aulas de Análise p/ Creators)</small></div>
+            <div class="tf-arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="tf-node">3. Monetização<br><small>(Casa de Lives ROI > 1)</small></div>
+            <div class="tf-arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="tf-node highlight">4. Produto GMV Max<br><small>(Escalável e Trackeado)</small></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. NORTH STAR METRIC -->
+      <section class="slide">
+        <div class="slide-content center-content">
+          <h2 class="slide-title"><i data-lucide="star"></i> North Star Metrics</h2>
+          <div class="nsm-deck-grid">
+            <div class="nsm-box">
+              <span class="nsm-val counter" data-target="3000">0</span>
+              <span class="nsm-label">Creators Agenciados na Base</span>
+            </div>
+            <div class="nsm-box">
+              <span class="nsm-val counter" data-target="240">0</span>
+              <span class="nsm-label">Leads p/ Dia (Aquisição)</span>
+            </div>
+            <div class="nsm-box">
+              <span class="nsm-val counter" data-target="5">0</span>
+              <span class="nsm-label">Clientes Ativos TT Shop Pagantes</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. OKR PRINCIPAL -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="target"></i> Desdobramento de KRs</h2>
+          <div class="okr-list-view">
+            
+            <div class="okr-row">
+              <div class="okr-badge">O03 KR1</div>
+              <div class="okr-details">
+                <h4>Vertical de Novos (Aquisição)</h4>
+                <p><strong>Meta:</strong> Alcançar 3.000 creators (240 leads/dia).</p>
+                <p><strong>Impacto:</strong> Garantir volume de MQL > 20 BRL e Custo por Agenciado > 25 BRL.</p>
+              </div>
+            </div>
+
+            <div class="okr-row">
+              <div class="okr-badge">O01 KR3</div>
+              <div class="okr-details">
+                <h4>Vertical de Vendas</h4>
+                <p><strong>Meta:</strong> Entregar Casa de Lives com ROI ≥ 1 (CPL R$ 33,70 constante).</p>
+                <p><strong>Impacto:</strong> Faturamento incremental de 50k em Maio e 80k em Junho.</p>
+              </div>
+            </div>
+
+            <div class="okr-row">
+              <div class="okr-badge">XPTO KR1</div>
+              <div class="okr-details">
+                <h4>Estruturar Produto Performance TT Shop</h4>
+                <p><strong>Meta:</strong> Produto fechado (escopo/pricing) + 5 clientes validados gerando receita.</p>
+                <p><strong>Impacto:</strong> Novo motor de receita escalável via GMV Max.</p>
+              </div>
+            </div>
+
+            <div class="okr-row">
+              <div class="okr-badge">Interno</div>
+              <div class="okr-details">
+                <h4>Data, Aulas & Estruturação do Squad</h4>
+                <p><strong>Meta:</strong> Tracking D+0 de canais, PDI do time mapeado, 10 aulas de Growth p/ Creators.</p>
+                <p><strong>Impacto:</strong> Maturidade operacional e autonomia da ponta à raiz.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. INICIATIVAS POR KR -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="list-checks"></i> Iniciativas por KR</h2>
+          <table class="initiative-table">
+            <thead>
+              <tr>
+                <th>Key Result Base</th>
+                <th>Iniciativas Conectadas</th>
+                <th>Output / Sucesso</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>[O03] 3.000 Creators / 240 leads dia</strong></td>
+                <td>Refazer ads de segmentação; Campanha de indique e ganhe comunidade; Testar YT/TikTok/Pinterest.</td>
+                <td>87% Volume Via Ads; 10% Novos Canais; 3% Orgânico Qualificado.</td>
+              </tr>
+              <tr>
+                <td><strong>[O01] Casa de Lives (ROI >= 1)</strong></td>
+                <td>Inbound funnel pré-evento; Operação remarketing pós-evento; Manter CPL R$33.</td>
+                <td>120 Leads Maio -> 50k Receita. <br>195 Leads Junho -> 80k Receita.</td>
+              </tr>
+              <tr>
+                <td><strong>[0.7] Produto Performance TT Shop</strong></td>
+                <td>Definir Pricing; SOP/Playbook Operacional; Estruturar máquina de vendas (LP + Pitch).</td>
+                <td>Tabela de preços, 5 contratos assinados e cases validando GMV.</td>
+              </tr>
+              <tr>
+                <td><strong>[0.5] Machine Tracking D+0</strong></td>
+                <td>Padronizar UTMs; Mapa de funis; Dashboards visuais.</td>
+                <td>Custo exato do lead e conversão mapeada pra cada 1 centavo.</td>
+              </tr>
+              <tr>
+                <td><strong>[0.3] Analítica p/ Creators</strong></td>
+                <td>Mapear dores c/ Forms; Criar 10 aulas focais; Treinar a base.</td>
+                <td>Creators otimizando próprio engajamento.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 7. PILARES DE GROWTH -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="layers"></i> Os 4 Pilares de Growth</h2>
+          <div class="pillars-deck-grid">
+            <div class="p-card">
+              <div class="p-icon"><i data-lucide="box"></i></div>
+              <h3>Produto</h3>
+              <p><strong>Ação:</strong> TT Shop Performance & Casa de Lives</p>
+              <p><strong>Impacto:</strong> Monetização da base e conversão previsível.</p>
+            </div>
+            <div class="p-card">
+              <div class="p-icon"><i data-lucide="magnet"></i></div>
+              <h3>Aquisição</h3>
+              <p><strong>Ação:</strong> Ads (87%), TT/YT (10%), Comunidade (3%).</p>
+              <p><strong>Impacto:</strong> 240 Leads/Dia (3.000 Creators no Q2).</p>
+            </div>
+            <div class="p-card">
+              <div class="p-icon"><i data-lucide="bar-chart-2"></i></div>
+              <h3>Conversão (Data)</h3>
+              <p><strong>Ação:</strong> Tracking D+0, UTMs, Dashboards Inteligentes.</p>
+              <p><strong>Impacto:</strong> Controle total do CPL, CAC e ROI da operação.</p>
+            </div>
+            <div class="p-card">
+              <div class="p-icon"><i data-lucide="users"></i></div>
+              <h3>Operação</h3>
+              <p><strong>Ação:</strong> Organograma da área, PDI do time, Capacitação na base (Creators).</p>
+              <p><strong>Impacto:</strong> Processos fluídos e autonomia de execução.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. ROADMAP POR SEMANA -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="calendar"></i> Roadmap Estratégico (Q2)</h2>
+          <div class="roadmap-phases">
+            
+            <div class="phase-col">
+              <div class="phase-head">
+                <h3>Fase 1: Diagnóstico</h3>
+                <span>Semanas 1 - 4</span>
+              </div>
+              <ul class="phase-list">
+                <li>Mapa da operação atual TT Shop.</li>
+                <li>Estruturar funil Inbound de Vendas / Automações.</li>
+                <li>Mapear dores dos Creators via Forms.</li>
+                <li>Organograma da Área e visão do BSC.</li>
+                <li>Definir UTMs e KPI macro.</li>
+              </ul>
+            </div>
+
+            <div class="phase-col active-phase">
+              <div class="phase-head">
+                <h3>Fase 2: Construção</h3>
+                <span>Semanas 5 - 10</span>
+              </div>
+              <ul class="phase-list">
+                <li>Definir Escopo e Pricing (TT Shop).</li>
+                <li>Criar Playbook (SOP Completo).</li>
+                <li>Criar plataforma com 10 aulas pra base.</li>
+                <li>Desenvolvimento Dashboards (Wireframe / IA).</li>
+                <li>PDI do time modelado.</li>
+              </ul>
+            </div>
+
+            <div class="phase-col">
+              <div class="phase-head">
+                <h3>Fase 3: Escala</h3>
+                <span>Semanas 11 - Final Q2</span>
+              </div>
+              <ul class="phase-list">
+                <li>Pitch, LP e Vendas ativas do TT Shop.</li>
+                <li>Teste prático final dos Dashboards pelos líderes.</li>
+                <li>Ter 5 Clientes Pagantes.</li>
+                <li>Projeção Conjunta do Q3.</li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. MÁQUINA DE EXECUÇÃO -->
+      <section class="slide">
+        <div class="slide-content center-content">
+          <h2 class="slide-title"><i data-lucide="cpu"></i> Máquina Escalar de Execução</h2>
+          <div class="execution-pipeline">
+            <div class="pipe">
+              <h4>1. Ingestão (Inputs)</h4>
+              <p>Meta Ads (87%), YouTube/TikTok (10%), Comunidade (3%)</p>
+            </div>
+            <div class="pipe-arr"><i data-lucide="arrow-right"></i></div>
+            <div class="pipe">
+              <h4>2. Qualificação MQL</h4>
+              <p>Filtro Inbound / Tintim Funnel <br><small>(CPL > 2,00 / MQL > 20,00)</small></p>
+            </div>
+            <div class="pipe-arr"><i data-lucide="arrow-right"></i></div>
+            <div class="pipe">
+              <h4>3. Processamento</h4>
+              <p>Agenciamento e Capacitação em Growth (Videoaulas 1 a 10)</p>
+            </div>
+            <div class="pipe-arr"><i data-lucide="arrow-right"></i></div>
+            <div class="pipe highlight">
+              <h4>4. Receita (Outputs)</h4>
+              <p>Casa de Lives (ROI > 1) <br>e TT Shop GMV Max (5 clientes)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. ESTRUTURA DE SQUAD -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="sitemap"></i> Estrutura do Squad (Metas Internas)</h2>
+          <div class="squad-roles">
+            <div class="role-card">
+              <h4>Head de Growth</h4>
+              <ul>
+                <li>Precificação TT Shop e Modelagem do Produto</li>
+                <li>Governança e Modelo de Metas Diário/Semanal</li>
+                <li>Visão e Condução com Liderança</li>
+              </ul>
+            </div>
+            <div class="role-card">
+              <h4>Performance / Aquisição</h4>
+              <ul>
+                <li>Campanhas Meta Ads / Tintim</li>
+                <li>Controle de CPL a R$ 33,70 e Otimização do Budget (R$400-600)</li>
+                <li>Tracking de UTMs na veia</li>
+              </ul>
+            </div>
+            <div class="role-card">
+              <h4>Criação / Comunicação</h4>
+              <ul>
+                <li>Aulas de Growth focais para Criadoras de base</li>
+                <li>Automações e Fluxos orgânicos / Comunidade as Service</li>
+              </ul>
+            </div>
+            <div class="role-card">
+              <h4>Operações / Sucesso</h4>
+              <ul>
+                <li>Construção do SOP de TT Shop</li>
+                <li>Dashboards (Mapeamento D+0) e Relatórios BI</li>
+                <li>Integrações finais de APIs</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. DASHBOARD DE MÉTRICAS -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="pie-chart"></i> Cockpit Live (KPIs Visualizados)</h2>
+          <div class="dash-sim-grid">
+            <div class="dash-card">
+              <h3>Participação da Aquisição (Leads/dia)</h3>
+              <canvas id="chart-acq" height="150"></canvas>
+            </div>
+            <div class="dash-card">
+              <h3>Projeção Casa de Lives (Leads vs Vendas)</h3>
+              <canvas id="chart-sales" height="150"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. RISCOS E ALAVANCAS -->
+      <section class="slide">
+        <div class="slide-content">
+          <h2 class="slide-title"><i data-lucide="scale"></i> Riscos e Alavancas</h2>
+          <div class="risk-reward-grid">
+            <div class="rs-panel risk">
+              <h3><i data-lucide="alert-octagon"></i> Riscos Implícitos</h3>
+              <ul>
+                <li>Tráfego pago (Ads) perder eficiência, estourando o CPL alvo de R$33,70.</li>
+                <li>Falta de engajamento das criadoras no módulo educacional de métricas.</li>
+                <li>Demora na validação do pricing que gere gargalo nos 5 clientes alvo de TT Shop.</li>
+                <li>Custo de Agenciado passar a média de BRL 25.</li>
+              </ul>
+            </div>
+            <div class="rs-panel reward">
+              <h3><i data-lucide="rocket"></i> Oportunidades & Alavancas</h3>
+              <ul>
+                <li>Conexão API gerando dashboards reais que blindam desvios de rota na Semana 1.</li>
+                <li>Comunidade (Indique & Ganhe) se tornar ativo altamente qualificado e barato!</li>
+                <li>O Playbook GMV Max virar produto de prateleira ultra-valioso (Escala Rápida).</li>
+                <li>O Funil Inbound Tintim girar contatos qualificados automáticos em Junho.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 13. FECHAMENTO -->
+      <section class="slide">
+        <div class="slide-content center-content">
+          <span class="slide-badge">Conclusão Estratégica</span>
+          <h1 class="hero-headline">Não estamos apenas captando. <br>Estamos construindo <span class="text-gold">um produto previsível.</span></h1>
+          
+          <div class="next-steps-banner">
+            <h3>Próximos Passos Imediatos:</h3>
+            <div class="steps-flex">
+              <div class="step-chip">Começar Mapeamento do Funil D+0</div>
+              <div class="step-chip">Campanha de Ads Segmentada</div>
+              <div class="step-chip">Fórum Diário de ROI/CPL</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script type="module" src="/src/okr/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+/* ============================================
+   AMPLIFY CREATORS DASHBOARD
+   Amplify Blue Theme — Presentation Deck (OKR Q2)
+   ============================================ */
+
+:root {
+  --brand-blue: #1E4DD1;
+  --bg-primary: #1640B0;
+  --bg-secondary: #0a1128;
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --font-main: 'Work Sans', sans-serif;
+  --font-outfit: 'Outfit', sans-serif;
+  --gold: #fbbf24;
+}
+
+*, *::before, *::after {
+  margin: 0; padding: 0; box-sizing: border-box;
+}
+
+body, html {
+  width: 100%; height: 100%;
+  overflow: hidden; /* Hide scrollbars for true slide experience */
+  font-family: var(--font-main);
+  background: radial-gradient(circle at 50% 50%, #162450 0%, #0f152d 100%);
+  color: var(--text-primary);
+}
+
+.deck-container {
+  width: 100vw; height: 100vh; position: relative;
+}
+
+.slides-wrapper {
+  width: 100%; height: 100%;
+  position: relative;
+}
+
+.slide {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0; visibility: hidden; transition: opacity 0.6s ease, transform 0.6s ease;
+  transform: translateY(20px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 80px;
+}
+
+.slide.active {
+  opacity: 1; visibility: visible; transform: translateY(0);
+}
+
+.slide-content {
+  width: 100%; max-width: 1200px; max-height: 100%;
+  background: rgba(255,255,255,0.03); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.05); padding: 50px; border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  overflow-y: auto; /* Just in case content overflows inside the card */
+}
+
+.slide-content::-webkit-scrollbar { width: 6px; }
+.slide-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+.center-content { text-align: center; }
+
+/* Global UI Overlay */
+.nav-btn {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+  color: #fff; width: 60px; height: 60px; border-radius: 50%;
+  font-size: 24px; cursor: pointer; z-index: 10; display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s;
+}
+.nav-btn:hover { background: var(--brand-blue); border-color: var(--brand-blue); transform: translateY(-50%) scale(1.1); }
+.prev-btn { left: 30px; }
+.next-btn { right: 30px; }
+
+.deck-progress { position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background: rgba(255,255,255,0.1); z-index: 10; }
+.deck-progress-bar { height: 100%; background: var(--gold); width: 0%; transition: width 0.3s ease; }
+
+.slide-counter { position: absolute; bottom: 30px; right: 40px; font-family: var(--font-outfit); font-weight: 700; color: rgba(255,255,255,0.5); font-size: 1.1rem; z-index: 10; }
+
+/* Utils */
+.text-gold { color: var(--gold); }
+.slide-badge { display: inline-block; padding: 6px 16px; background: rgba(251,191,36,0.1); color: var(--gold); font-weight: 700; font-size: 0.9rem; border-radius: 999px; border: 1px solid rgba(251,191,36,0.3); margin-bottom: 20px; }
+
+/* 1. HERO */
+.hero-headline { font-family: var(--font-outfit); font-size: 4rem; font-weight: 900; line-height: 1.1; margin-bottom: 24px; }
+.hero-subheadline { font-size: 1.3rem; color: var(--text-secondary); max-width: 800px; margin: 0 auto; }
+
+/* 2. CONTEXTO */
+.slide-title { font-family: var(--font-outfit); font-size: 2.2rem; font-weight: 800; display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
+.slide-title i { color: var(--gold); }
+
+.context-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+.context-card { background: rgba(0,0,0,0.2); padding: 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); cursor: default; transition: all 0.3s; }
+.context-card:hover { background: rgba(30,77,209,0.1); border-color: rgba(30,77,209,0.4); transform: translateY(-4px); }
+.context-card h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 12px; color: #fff; }
+.context-card p { font-size: 0.95rem; color: var(--text-secondary); }
+
+/* 3. TESE DE GROWTH */
+.thesis-text { font-size: 1.2rem; font-style: italic; color: rgba(255,255,255,0.8); margin-bottom: 40px; }
+.thesis-flow { display: flex; align-items: center; justify-content: space-center; gap: 16px; }
+.tf-node { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); padding: 20px; border-radius: 12px; font-weight: 700; text-align: center; }
+.tf-node small { display: block; font-weight: 400; color: var(--text-secondary); margin-top: 8px; font-size: 0.8rem; }
+.tf-node.highlight { background: var(--brand-blue); border-color: #4A7AFF; box-shadow: 0 0 20px rgba(30,77,209,0.5); }
+.tf-arrow { color: rgba(255,255,255,0.3); }
+
+/* 4. NORTH STAR */
+.nsm-deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 40px; }
+.nsm-box { background: rgba(0,0,0,0.3); border: 1px solid rgba(251,191,36,0.2); padding: 40px 20px; border-radius: 20px; box-shadow: inset 0 0 30px rgba(251,191,36,0.05); }
+.nsm-val { display: block; font-family: var(--font-outfit); font-size: 4rem; font-weight: 900; color: var(--gold); line-height: 1; margin-bottom: 16px; }
+.nsm-label { font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.8); }
+
+/* 5. OKR PRINCIPAL */
+.okr-list-view { display: flex; flex-direction: column; gap: 16px; }
+.okr-row { display: flex; gap: 24px; align-items: flex-start; background: rgba(255,255,255,0.03); padding: 24px; border-radius: 16px; border-left: 4px solid var(--brand-blue); }
+.okr-badge { font-family: var(--font-outfit); font-weight: 800; font-size: 1rem; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 8px; flex-shrink: 0; min-width: 100px; text-align: center; }
+.okr-details h4 { font-size: 1.15rem; margin-bottom: 8px; }
+.okr-details p { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 4px; }
+.okr-details strong { color: #fff; }
+
+/* 6. INICIATIVAS */
+.initiative-table { width: 100%; border-collapse: collapse; text-align: left; }
+.initiative-table th, .initiative-table td { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; }
+.initiative-table th { font-weight: 700; color: var(--gold); border-bottom-width: 2px; }
+.initiative-table td { color: var(--text-secondary); }
+.initiative-table td strong { color: #fff; }
+
+/* 7. PILARES */
+.pillars-deck-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.p-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; }
+.p-icon { font-size: 24px; color: var(--gold); margin-bottom: 20px; }
+.p-card h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+.p-card p { font-size: 0.85rem; margin-bottom: 8px; color: var(--text-secondary); }
+.p-card p strong { color: #fff; }
+
+/* 8. ROADMAP */
+.roadmap-phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; }
+.phase-col { background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; }
+.active-phase { border-color: rgba(30,77,209,0.5); background: rgba(30,77,209,0.1); }
+.phase-head { margin-bottom: 20px; }
+.phase-head h3 { font-size: 1.15rem; font-weight: 700; }
+.phase-head span { font-size: 0.8rem; color: var(--gold); font-weight: 600; text-transform: uppercase; }
+.phase-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.phase-list li { font-size: 0.85rem; color: rgba(255,255,255,0.8); display: flex; gap: 8px; }
+.phase-list li::before { content: '→'; color: var(--gold); }
+
+/* 9. MÁQUINA DE EXECUÇÃO */
+.execution-pipeline { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pipe { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; text-align: left; width: 220px; }
+.pipe h4 { font-size: 1rem; color: var(--gold); margin-bottom: 8px; }
+.pipe p { font-size: 0.85rem; color: rgba(255,255,255,0.7); line-height: 1.4; }
+.pipe-arr { color: rgba(255,255,255,0.2); }
+.pipe.highlight { background: var(--brand-blue); border-color: #4A7AFF; box-shadow: 0 10px 30px rgba(30,77,209,0.4); }
+.pipe.highlight h4 { color: #fff; }
+.pipe.highlight p { color: rgba(255,255,255,0.9); }
+
+/* 10. SQUAD */
+.squad-roles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+.role-card { background: rgba(0,0,0,0.2); padding: 24px; border-radius: 12px; border-left: 4px solid var(--gold); }
+.role-card h4 { font-size: 1.15rem; margin-bottom: 12px; }
+.role-card ul { padding-left: 20px; font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+.role-card li::marker { color: var(--gold); }
+
+/* 11. DASHBOARD GRIDS */
+.dash-sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.dash-card { background: rgba(255,255,255,0.03); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); }
+.dash-card h3 { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); margin-bottom: 16px; text-align: center; }
+
+/* 12. RISCOS */
+.risk-reward-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.rs-panel { padding: 30px; border-radius: 16px; border: 1px solid; }
+.rs-panel.risk { background: rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.2); }
+.rs-panel.reward { background: rgba(16, 185, 129, 0.05); border-color: rgba(16, 185, 129, 0.2); }
+.rs-panel h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 1.25rem; }
+.rs-panel.risk h3 { color: #fca5a5; }
+.rs-panel.reward h3 { color: #6ee7b7; }
+.rs-panel ul { padding-left: 20px; font-size: 0.95rem; color: rgba(255,255,255,0.8); line-height: 1.6;}
+.rs-panel.risk li::marker { color: var(--danger); }
+.rs-panel.reward li::marker { color: var(--success); }
+
+/* 13. FECHAMENTO */
+.next-steps-banner { margin-top: 40px; background: rgba(0,0,0,0.2); padding: 30px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); }
+.next-steps-banner h3 { color: rgba(255,255,255,0.6); margin-bottom: 20px; font-size: 1.1rem; }
+.steps-flex { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.step-chip { background: rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; border: 1px solid rgba(255,255,255,0.2); }
