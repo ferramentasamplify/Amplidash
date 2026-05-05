@@ -13,12 +13,16 @@ import {
   getWeeklyFactHistory,
   loadParticipantsData,
   persistVotingSession,
+  reportParticipantObjective,
   recordWeeklyFactHistory,
   removeParticipant,
   restoreSnapshot,
   resetAllScores,
   updateParticipantObjectives,
+  updateParticipantScores,
+  VAR_REPORT_THRESHOLD,
 } from './data.js';
+import { generatePDF } from './pdf.js';
 import { getInitials } from './utils.js';
 import { CATEGORY_DEFINITIONS } from './shared.js';
 
@@ -33,6 +37,7 @@ let botwVotes = {};
 let botwStep = 'SPEAKING';
 let bestWinnerId = null;
 let worstWinnerId = null;
+let pendingWeeklyFactEntry = null;
 let pendingRetryIntervalId = null;
 let navigationHistory = [];
 
@@ -81,6 +86,54 @@ function escapeHtml(value = '') {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+const OBJECTIVE_VAR_PLACEHOLDER = 'O VAR passou aqui';
+const SCORE_EDIT_CATEGORIES = CATEGORY_DEFINITIONS.filter((category) => category.key !== 'bestWeek');
+
+function getParticipantById(participantId) {
+  return getParticipantsData().find((participant) => participant.id === participantId) || null;
+}
+
+function getObjectiveModerationState(participant, categoryKey) {
+  return participant?.objectiveModeration?.[categoryKey] || { reporterIds: [], flagged: false };
+}
+
+function isObjectiveVarFlagged(participant, categoryKey) {
+  const moderation = getObjectiveModerationState(participant, categoryKey);
+  return Boolean(moderation.flagged) || (moderation.reporterIds?.length || 0) >= VAR_REPORT_THRESHOLD;
+}
+
+function getObjectiveDisplayState(participant, categoryKey) {
+  const rawObjective = participant?.objectives?.[categoryKey];
+  const hasGoal = Boolean(rawObjective && String(rawObjective).trim() !== '');
+  const flagged = hasGoal && isObjectiveVarFlagged(participant, categoryKey);
+
+  if (!hasGoal) {
+    return {
+      hasGoal: false,
+      flagged: false,
+      text: 'Nenhuma meta registrada',
+    };
+  }
+
+  return {
+    hasGoal: true,
+    flagged,
+    text: flagged ? OBJECTIVE_VAR_PLACEHOLDER : rawObjective,
+  };
+}
+
+function parseScoreNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function calculateParticipantScoreTotal(categories = {}) {
+  return CATEGORY_DEFINITIONS.reduce(
+    (total, category) => total + parseScoreNumber(categories[category.key]),
+    0,
+  );
 }
 
 function getParticipantPhotoUrl(participant) {
@@ -150,6 +203,7 @@ function snapshotGameState() {
     botwStep,
     bestWinnerId,
     worstWinnerId,
+    pendingWeeklyFactEntry: cloneState(pendingWeeklyFactEntry),
   };
 }
 
@@ -167,6 +221,7 @@ function restoreGameState(snapshot) {
   botwStep = snapshot.botwStep;
   bestWinnerId = snapshot.bestWinnerId;
   worstWinnerId = snapshot.worstWinnerId;
+  pendingWeeklyFactEntry = cloneState(snapshot.pendingWeeklyFactEntry || null);
 }
 
 function pushGameStateSnapshot() {
@@ -199,6 +254,17 @@ function formatDateForInput(date = new Date()) {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getPdfReportLabel() {
+  const history = getWeeklyFactHistory();
+  const latestHistoryEntry = history.length ? history[history.length - 1] : null;
+
+  if (latestHistoryEntry?.date) {
+    return `Rodada atual • Último registro ${formatDateForDisplay(latestHistoryEntry.date)}`;
+  }
+
+  return 'Rodada atual • Best of The Week';
 }
 
 function hasMeaningfulWeeklyFactDescription(value) {
@@ -379,6 +445,11 @@ function renderGeneralRanking(generalData) {
 function bindVotingEvents() {
   $('#start-voting-btn')?.addEventListener('click', startVotingSystem);
   $('#reset-scores-btn')?.addEventListener('click', handleResetScores);
+  $('#manage-btn')?.addEventListener('click', openManagementHome);
+  $('#download-pdf-btn')?.addEventListener('click', () => {
+    const rankings = getCategorizedRankings();
+    generatePDF(rankings, getPdfReportLabel());
+  });
   $('#modal-close-btn')?.addEventListener('click', () => {
     $('#voting-modal').style.display = 'none';
   });
@@ -392,11 +463,9 @@ function bindVotingEvents() {
   $('#btn-skip-step')?.addEventListener('click', handleSkipStep);
 
   // Management Events
-  $('#manage-dropdown #add-voter-btn')?.addEventListener('click', startAddParticipantFlow);
-  $('#manage-dropdown #manage-participants-btn')?.addEventListener('click', startManageParticipantsFlow);
-  $('#manage-dropdown #add-weekly-fact-btn')?.addEventListener('click', startAddWeeklyFactFlow);
-  $('#manage-dropdown #new-cycle-btn')?.addEventListener('click', startNewCycleFlow);
-  $('#manage-dropdown #toggle-goals-btn')?.addEventListener('click', toggleGoalsWindow);
+  $('#management-content')?.addEventListener('click', handleManagementContentClick);
+  $('#management-content')?.addEventListener('change', handleManagementContentChange);
+  $('#management-content')?.addEventListener('input', handleManagementContentInput);
   $('#management-close-btn')?.addEventListener('click', () => {
     $('#management-modal').style.display = 'none';
   });
@@ -404,7 +473,6 @@ function bindVotingEvents() {
   $('#management-btn-next')?.addEventListener('click', handleMgmtNext);
 
   // Goals Modal Events
-  $('#add-goals-btn')?.addEventListener('click', openGoalsModal);
   $('#goals-close-btn')?.addEventListener('click', () => {
     $('#goals-modal').style.display = 'none';
   });
@@ -416,7 +484,7 @@ function bindVotingEvents() {
 }
 
 // Management Flow State
-let mgmtFlow = null; // 'ADD_PARTICIPANT' | 'ADD_WEEKLY_FACT' | 'NEW_CYCLE'
+let mgmtFlow = null; // 'HOME' | 'ADD_PARTICIPANT' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
 let mgmtStep = 0;
 let mgmtData = {};
 const MGMT_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
@@ -440,7 +508,80 @@ function setManagementModalVariant(variant = 'default') {
   const modal = $('#management-modal');
   if (!modal) return;
 
+  modal.classList.toggle('management-modal--hub', variant === 'hub');
   modal.classList.toggle('management-modal--weekly-fact', variant === 'weekly-fact');
+}
+
+function openManagementHome() {
+  mgmtFlow = 'HOME';
+  mgmtStep = 0;
+  mgmtData = {};
+
+  $('#management-modal').style.display = 'flex';
+  $('#management-title').textContent = 'Gerenciar';
+  $('#management-icon').textContent = '⚙️';
+  renderManagementStep();
+}
+
+function handleManagementContentClick(event) {
+  const actionTrigger = event.target.closest('[data-mgmt-action]');
+  if (!actionTrigger) return;
+
+  const { mgmtAction } = actionTrigger.dataset;
+  const participantId = actionTrigger.dataset.participantId;
+
+  if (mgmtAction === 'ADD_PARTICIPANT') {
+    startAddParticipantFlow();
+  } else if (mgmtAction === 'MANAGE_PARTICIPANTS') {
+    startManageParticipantsFlow();
+  } else if (mgmtAction === 'ADD_WEEKLY_FACT') {
+    startAddWeeklyFactFlow();
+  } else if (mgmtAction === 'CALL_VAR') {
+    startCallVarFlow();
+  } else if (mgmtAction === 'NEW_CYCLE') {
+    startNewCycleFlow();
+  } else if (mgmtAction === 'OPEN_GOALS' && isGoalsWindowActive()) {
+    $('#management-modal').style.display = 'none';
+    openGoalsModal();
+  } else if (mgmtAction === 'REMOVE_PARTICIPANT' && participantId) {
+    handleRemoveParticipant(participantId);
+  } else if (mgmtAction === 'SAVE_PARTICIPANT_SCORES' && participantId) {
+    handleSaveParticipantScores(participantId);
+  }
+}
+
+function handleManagementContentChange(event) {
+  if (mgmtFlow === 'MANAGE_PARTICIPANTS' && event.target.id === 'mgmt-participant-select') {
+    mgmtData.selectedParticipantId = event.target.value || '';
+    renderManagementStep();
+    return;
+  }
+
+  if (mgmtFlow !== 'CALL_VAR') return;
+
+  if (event.target.id === 'mgmt-var-reporter') {
+    mgmtData.reporterId = event.target.value || '';
+    renderManagementStep();
+  }
+
+  if (event.target.id === 'mgmt-var-participant') {
+    mgmtData.participantId = event.target.value || '';
+    renderManagementStep();
+  }
+
+  if (event.target.id === 'mgmt-var-category') {
+    mgmtData.categoryKey = event.target.value || '';
+    renderManagementStep();
+  }
+}
+
+function handleManagementContentInput(event) {
+  if (mgmtFlow !== 'MANAGE_PARTICIPANTS') return;
+
+  const participantCard = event.target.closest('[data-participant-card]');
+  if (!participantCard) return;
+
+  updateParticipantScorePreview(participantCard.dataset.participantCard);
 }
 
 function startAddParticipantFlow() {
@@ -457,11 +598,11 @@ function startAddParticipantFlow() {
 function startManageParticipantsFlow() {
   mgmtFlow = 'MANAGE_PARTICIPANTS';
   mgmtStep = 0;
-  mgmtData = {};
+  mgmtData = { selectedParticipantId: '' };
 
   $('#management-modal').style.display = 'flex';
   $('#management-title').textContent = 'Gerenciar Participantes';
-  $('#management-icon').textContent = '🗑️';
+  $('#management-icon').textContent = '👥';
   renderManagementStep();
 }
 
@@ -478,6 +619,81 @@ export async function handleRemoveParticipant(id) {
 // Torna global para que o onclick= inline funcione
 window.handleRemoveParticipant = handleRemoveParticipant;
 
+function updateParticipantScorePreview(participantId) {
+  const card = $(`[data-participant-card="${participantId}"]`);
+  if (!card) return;
+
+  const categories = {
+    exercicio: parseScoreNumber($(`#mgmt-score-${participantId}-exercicio`)?.value),
+    familia: parseScoreNumber($(`#mgmt-score-${participantId}-familia`)?.value),
+    alimentacao: parseScoreNumber($(`#mgmt-score-${participantId}-alimentacao`)?.value),
+    hobbies: parseScoreNumber($(`#mgmt-score-${participantId}-hobbies`)?.value),
+    conhecimentos: parseScoreNumber($(`#mgmt-score-${participantId}-conhecimentos`)?.value),
+    bestWeek: parseScoreNumber($(`#mgmt-score-${participantId}-bestWeek`)?.value),
+  };
+
+  const baseWithoutBestWeek = SCORE_EDIT_CATEGORIES.reduce(
+    (total, category) => total + parseScoreNumber(categories[category.key]),
+    0,
+  );
+
+  const totalOverrideInput = $(`#mgmt-total-override-${participantId}`);
+  const totalOverrideRaw = totalOverrideInput?.value?.trim() || '';
+  const totalOverride = totalOverrideRaw === '' ? null : parseScoreNumber(totalOverrideRaw, null);
+  const finalBestWeek = totalOverride === null ? categories.bestWeek : totalOverride - baseWithoutBestWeek;
+  const finalTotal = baseWithoutBestWeek + finalBestWeek;
+
+  const totalPreview = $(`#mgmt-total-preview-${participantId}`);
+  const bestWeekHint = $(`#mgmt-bestweek-hint-${participantId}`);
+
+  if (totalPreview) {
+    totalPreview.textContent = `${finalTotal} pts`;
+  }
+
+  if (bestWeekHint) {
+    bestWeekHint.textContent = totalOverride === null
+      ? `Best of The Week atual: ${categories.bestWeek} pts`
+      : `Com o total informado, Best of The Week ficará em ${finalBestWeek} pts`;
+  }
+}
+
+function handleSaveParticipantScores(participantId) {
+  const participant = getParticipantById(participantId);
+  if (!participant) {
+    window.alert('Participante não encontrado para salvar a pontuação.');
+    return;
+  }
+
+  const categories = {
+    exercicio: parseScoreNumber($(`#mgmt-score-${participantId}-exercicio`)?.value),
+    familia: parseScoreNumber($(`#mgmt-score-${participantId}-familia`)?.value),
+    alimentacao: parseScoreNumber($(`#mgmt-score-${participantId}-alimentacao`)?.value),
+    hobbies: parseScoreNumber($(`#mgmt-score-${participantId}-hobbies`)?.value),
+    conhecimentos: parseScoreNumber($(`#mgmt-score-${participantId}-conhecimentos`)?.value),
+    bestWeek: parseScoreNumber($(`#mgmt-score-${participantId}-bestWeek`)?.value),
+  };
+
+  const totalOverrideRaw = $(`#mgmt-total-override-${participantId}`)?.value?.trim() || '';
+  if (totalOverrideRaw !== '') {
+    if (!Number.isFinite(Number(totalOverrideRaw))) {
+      window.alert('Informe um total final válido para salvar a pontuação.');
+      return;
+    }
+
+    const baseWithoutBestWeek = SCORE_EDIT_CATEGORIES.reduce(
+      (total, category) => total + parseScoreNumber(categories[category.key]),
+      0,
+    );
+    categories.bestWeek = parseScoreNumber(totalOverrideRaw) - baseWithoutBestWeek;
+  }
+
+  updateParticipantScores(participantId, categories);
+  createSnapshot(`Pontuação ajustada: ${participant.name}`);
+  renderDashboard();
+  renderManagementStep();
+  window.alert(`Pontuação de ${participant.name} atualizada com sucesso.`);
+}
+
 function startAddWeeklyFactFlow() {
   mgmtFlow = 'ADD_WEEKLY_FACT';
   mgmtStep = 0;
@@ -492,6 +708,21 @@ function startAddWeeklyFactFlow() {
   $('#management-modal').style.display = 'flex';
   $('#management-title').textContent = 'Adicionar Melhor e Pior Fato';
   $('#management-icon').textContent = '📝';
+  renderManagementStep();
+}
+
+function startCallVarFlow() {
+  mgmtFlow = 'CALL_VAR';
+  mgmtStep = 0;
+  mgmtData = {
+    reporterId: '',
+    participantId: '',
+    categoryKey: MGMT_CATEGORIES[0]?.key || '',
+  };
+
+  $('#management-modal').style.display = 'flex';
+  $('#management-title').textContent = 'Chamar o VAR';
+  $('#management-icon').textContent = '🚨';
   renderManagementStep();
 }
 
@@ -517,10 +748,219 @@ function renderManagementStep() {
   const btnNext = $('#management-btn-next');
   const btnBack = $('#management-btn-back');
 
-  setManagementModalVariant(mgmtFlow === 'ADD_WEEKLY_FACT' ? 'weekly-fact' : 'default');
-  btnBack.style.display = mgmtStep > 0 ? 'flex' : 'none';
-  btnNext.style.display = mgmtFlow === 'MANAGE_PARTICIPANTS' ? 'none' : 'flex';
+  const variant = mgmtFlow === 'HOME'
+    ? 'hub'
+    : mgmtFlow === 'CALL_VAR'
+      ? 'hub'
+    : mgmtFlow === 'ADD_WEEKLY_FACT'
+      ? 'weekly-fact'
+      : 'default';
+
+  setManagementModalVariant(variant);
+  btnBack.style.display = mgmtFlow === 'HOME' ? 'none' : 'flex';
+  btnNext.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'MANAGE_PARTICIPANTS' ? 'none' : 'flex';
   btnNext.textContent = 'Próximo';
+
+  if (mgmtFlow === 'HOME') {
+    content.innerHTML = `
+      <div class="management-home">
+        <section class="management-home-banner">
+          <span class="management-home-eyebrow">Central de ações</span>
+          <h4 class="management-home-title">Organize a rodada em um só lugar</h4>
+          <p class="management-home-copy">
+            Cadastre participantes, acompanhe o status das metas e atualize o histórico da semana sem navegar por menus soltos.
+          </p>
+        </section>
+
+        <section class="management-home-grid">
+          <button type="button" class="management-action-card" data-mgmt-action="ADD_PARTICIPANT">
+            <div class="management-action-header">
+              <span class="management-action-icon">➕</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Adicionar participante</strong>
+              <span class="management-action-description">Cadastre um novo nome e já configure as metas iniciais da semana.</span>
+            </span>
+            <span class="management-card-cta">Cadastrar</span>
+          </button>
+
+          <button type="button" class="management-action-card management-action-card--goals" data-mgmt-action="OPEN_GOALS" id="mgmt-goals-panel">
+            <div class="management-action-header">
+              <span class="management-action-icon">🎯</span>
+              <span class="management-card-chip management-card-chip--success" id="mgmt-goals-chip">Sempre aberto</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Registro de metas</strong>
+              <span class="management-action-description" id="mgmt-goals-status">O registro de metas fica liberado o tempo todo.</span>
+              <span class="management-action-subcopy" id="mgmt-goals-meta">Os participantes podem criar ou editar as metas sempre que precisarem.</span>
+            </span>
+            <span class="management-card-cta" id="mgmt-goals-btn">Registrar metas</span>
+            <div class="management-goals-countdown" id="mgmt-goals-countdown" hidden></div>
+          </button>
+
+          <button type="button" class="management-action-card management-action-card--var" data-mgmt-action="CALL_VAR">
+            <div class="management-action-header">
+              <span class="management-action-icon">🚨</span>
+              <span class="management-card-chip management-card-chip--alert">3 denúncias</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Chamar o VAR</strong>
+              <span class="management-action-description">Se três pessoas denunciarem a mesma meta, ela some e vira "O VAR passou aqui" até ser alterada.</span>
+            </span>
+            <span class="management-card-cta">Abrir VAR</span>
+          </button>
+
+          <button type="button" class="management-action-card" data-mgmt-action="MANAGE_PARTICIPANTS">
+            <div class="management-action-header">
+              <span class="management-action-icon">👥</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Gerenciar participantes</strong>
+              <span class="management-action-description">Selecione um participante para ajustar pontos por categoria, total final ou excluir o perfil.</span>
+            </span>
+            <span class="management-card-cta">Abrir editor</span>
+          </button>
+
+          <button type="button" class="management-action-card" data-mgmt-action="ADD_WEEKLY_FACT">
+            <div class="management-action-header">
+              <span class="management-action-icon">📝</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Melhor e pior fato</strong>
+              <span class="management-action-description">Atualize o histórico da home com os acontecimentos da semana.</span>
+            </span>
+            <span class="management-card-cta">Atualizar histórico</span>
+          </button>
+
+          <button type="button" class="management-action-card management-action-card--alert" data-mgmt-action="NEW_CYCLE">
+            <div class="management-action-header">
+              <span class="management-action-icon">🚀</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Iniciar novo melhores</strong>
+              <span class="management-action-description">Zere a rodada atual e redefina as metas para começar um novo ciclo.</span>
+            </span>
+            <span class="management-card-cta">Reiniciar rodada</span>
+          </button>
+        </section>
+      </div>
+    `;
+
+    syncGoalsButtonState();
+    return;
+  }
+
+  if (mgmtFlow === 'CALL_VAR') {
+    const participants = [...getParticipantsData()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    const selectedParticipant = getParticipantById(mgmtData.participantId);
+    const selectedCategory = MGMT_CATEGORIES.find((category) => category.key === mgmtData.categoryKey) || MGMT_CATEGORIES[0];
+    const objectiveState = selectedParticipant && selectedCategory
+      ? getObjectiveDisplayState(selectedParticipant, selectedCategory.key)
+      : null;
+    const reviewState = selectedParticipant && selectedCategory
+      ? getObjectiveModerationState(selectedParticipant, selectedCategory.key)
+      : { reporterIds: [], flagged: false };
+    const reporterNames = reviewState.reporterIds
+      .map((reporterId) => getParticipantById(reporterId)?.name || reporterId)
+      .filter(Boolean);
+    const categoryOptions = MGMT_CATEGORIES
+      .map((category) => `
+        <option value="${escapeHtml(category.key)}" ${category.key === selectedCategory?.key ? 'selected' : ''}>
+          ${escapeHtml(category.title)}
+        </option>
+      `)
+      .join('');
+
+    btnNext.textContent = 'Registrar denúncia';
+
+    content.innerHTML = `
+      <div class="mgmt-var-shell">
+        <section class="mgmt-var-intro">
+          <span class="mgmt-weekly-eyebrow">Validação de metas</span>
+          <h4 class="mgmt-weekly-title">Chamar o VAR</h4>
+          <p class="mgmt-weekly-copy">
+            Registre uma denúncia quando uma meta estiver fora do combinado. Com ${VAR_REPORT_THRESHOLD} denúncias únicas, a meta some do jogo e fica marcada como "${OBJECTIVE_VAR_PLACEHOLDER}" até ser alterada.
+          </p>
+        </section>
+
+        <div class="mgmt-var-grid">
+          <section class="mgmt-var-panel">
+            <div class="mgmt-form-group">
+              <label for="mgmt-var-reporter">Quem está denunciando?</label>
+              <select id="mgmt-var-reporter" class="mgmt-input">
+                <option value="">Selecione um participante</option>
+                ${participants.map((participant) => `
+                  <option value="${escapeHtml(participant.id)}" ${participant.id === mgmtData.reporterId ? 'selected' : ''}>
+                    ${escapeHtml(participant.name)}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="mgmt-form-group">
+              <label for="mgmt-var-participant">Meta de quem vai para revisão?</label>
+              <select id="mgmt-var-participant" class="mgmt-input">
+                <option value="">Selecione um participante</option>
+                ${participants.map((participant) => `
+                  <option value="${escapeHtml(participant.id)}" ${participant.id === mgmtData.participantId ? 'selected' : ''}>
+                    ${escapeHtml(participant.name)}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="mgmt-form-group mgmt-form-group-last">
+              <label for="mgmt-var-category">Categoria da meta</label>
+              <select id="mgmt-var-category" class="mgmt-input">
+                ${categoryOptions}
+              </select>
+            </div>
+          </section>
+
+          <section class="mgmt-var-panel mgmt-var-panel--preview">
+            <div class="mgmt-var-preview-head">
+              <div>
+                <span class="weekly-history-badge badge-worst">Radar do VAR</span>
+                <h5 class="mgmt-weekly-card-title">Status da meta</h5>
+              </div>
+              <span class="management-card-chip ${reviewState.flagged ? 'management-card-chip--alert' : 'management-card-chip--neutral'}">
+                ${reviewState.reporterIds.length}/${VAR_REPORT_THRESHOLD} denúncias
+              </span>
+            </div>
+
+            ${selectedParticipant && selectedCategory ? `
+              <div class="mgmt-var-summary">
+                ${buildAvatarMarkup(selectedParticipant, 'item-avatar')}
+                <div>
+                  <div class="weekly-history-summary-name">${escapeHtml(selectedParticipant.name)}</div>
+                  <div class="weekly-history-summary-handle">${escapeHtml(selectedCategory.title)}</div>
+                </div>
+              </div>
+              <div class="mgmt-var-goal ${objectiveState?.flagged ? 'is-flagged' : ''}">
+                ${objectiveState?.hasGoal ? escapeHtml(objectiveState.text) : 'Nenhuma meta cadastrada nessa categoria.'}
+              </div>
+            ` : `
+              <div class="mgmt-var-empty">Selecione um participante e uma categoria para revisar a meta atual.</div>
+            `}
+
+            <div class="mgmt-var-reporters">
+              <span class="mgmt-var-reporters-label">Denúncias registradas</span>
+              ${reporterNames.length
+                ? `<div class="mgmt-var-reporters-list">${reporterNames.map((name) => `<span class="mgmt-var-reporter-chip">${escapeHtml(name)}</span>`).join('')}</div>`
+                : '<p class="mgmt-var-reporters-empty">Ainda não há denúncias nessa meta.</p>'}
+            </div>
+
+            ${reviewState.flagged ? `
+              <p class="mgmt-var-warning">O VAR passou aqui. A meta ficará oculta no jogo e no perfil até o participante alterar esse texto.</p>
+            ` : `
+              <p class="mgmt-var-warning">Quando a terceira denúncia única entrar, a meta será ocultada automaticamente.</p>
+            `}
+          </section>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   if (mgmtFlow === 'MANAGE_PARTICIPANTS') {
     const participants = getParticipantsData().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -530,20 +970,118 @@ function renderManagementStep() {
       return;
     }
 
+    const selectedParticipantId = participants.some((participant) => participant.id === mgmtData.selectedParticipantId)
+      ? mgmtData.selectedParticipantId
+      : '';
+    mgmtData.selectedParticipantId = selectedParticipantId;
+    const selectedParticipant = selectedParticipantId
+      ? participants.find((participant) => participant.id === selectedParticipantId)
+      : null;
+
     content.innerHTML = `
-      <div class="mgmt-participants-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 8px;">
-        ${participants.map((p) => `
-          <div class="mgmt-participant-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              ${buildAvatarMarkup(p, 'item-avatar', getInitials(p.name))}
-              <div style="display: flex; flex-direction: column;">
-                <span style="font-weight: 500;">${escapeHtml(p.name)}</span>
-                <span style="font-size: 0.8rem; opacity: 0.6;">${escapeHtml(p.handle)}</span>
+      <div class="mgmt-participants-shell">
+        <section class="mgmt-participants-intro">
+          <span class="mgmt-weekly-eyebrow">Editor de pontuação</span>
+          <h4 class="mgmt-weekly-title">Gerenciar participantes</h4>
+          <p class="mgmt-weekly-copy">
+            Escolha primeiro quem você quer editar. Depois, ajuste pontuações por categoria, confira o total final e exclua o participante se precisar.
+          </p>
+        </section>
+
+        <section class="mgmt-participants-picker">
+          <label for="mgmt-participant-select" class="mgmt-score-label">Selecione um participante</label>
+          <select id="mgmt-participant-select" class="mgmt-input">
+            <option value="">Escolha quem você quer gerenciar</option>
+            ${participants.map((participant) => `
+              <option value="${escapeHtml(participant.id)}" ${participant.id === selectedParticipantId ? 'selected' : ''}>
+                ${escapeHtml(participant.name)}
+              </option>
+            `).join('')}
+          </select>
+          <p class="mgmt-participants-picker-copy">
+            Ao selecionar alguém, o editor de pontuação aparece logo abaixo com todas as categorias e o total final.
+          </p>
+        </section>
+
+        ${selectedParticipant ? `
+          <article class="mgmt-participant-card mgmt-participant-card--editor" data-participant-card="${escapeHtml(selectedParticipant.id)}">
+            <div class="mgmt-participant-card-head">
+              <div class="mgmt-participant-summary">
+              ${buildAvatarMarkup(selectedParticipant, 'item-avatar', getInitials(selectedParticipant.name))}
+                <div class="mgmt-participant-meta">
+                  <span class="mgmt-participant-name">${escapeHtml(selectedParticipant.name)}</span>
+                  <span class="mgmt-participant-handle">${escapeHtml(selectedParticipant.handle)}</span>
+                </div>
+              </div>
+              <div class="mgmt-participant-total-box">
+                <span class="mgmt-participant-total-label">Total atual</span>
+                <strong class="mgmt-participant-total-value" id="mgmt-total-preview-${escapeHtml(selectedParticipant.id)}">${selectedParticipant.totalPoints} pts</strong>
               </div>
             </div>
-            <button class="btn btn-danger-ghost btn-sm remove-participant-btn" onclick="window.handleRemoveParticipant('${escapeHtml(p.id)}')" style="padding: 6px 12px; font-size: 0.85rem; border-color: rgba(255,70,70,0.5); color: #ff5555;">Excluir</button>
+
+            <div class="mgmt-score-grid">
+              ${SCORE_EDIT_CATEGORIES.map((category) => `
+                <label class="mgmt-score-field">
+                  <span class="mgmt-score-label">${category.icon} ${escapeHtml(category.title)}</span>
+                  <input
+                    type="number"
+                    class="mgmt-input"
+                    id="mgmt-score-${escapeHtml(selectedParticipant.id)}-${category.key}"
+                    value="${parseScoreNumber(selectedParticipant.categories?.[category.key])}"
+                    step="1"
+                  >
+                </label>
+              `).join('')}
+
+              <label class="mgmt-score-field">
+                <span class="mgmt-score-label">🌟 Best of The Week</span>
+                <input
+                  type="number"
+                  class="mgmt-input"
+                  id="mgmt-score-${escapeHtml(selectedParticipant.id)}-bestWeek"
+                  value="${parseScoreNumber(selectedParticipant.categories?.bestWeek)}"
+                  step="1"
+                >
+              </label>
+
+              <label class="mgmt-score-field mgmt-score-field--total">
+                <span class="mgmt-score-label">Σ Ajustar total final</span>
+                <input
+                  type="number"
+                  class="mgmt-input"
+                  id="mgmt-total-override-${escapeHtml(selectedParticipant.id)}"
+                  value=""
+                  step="1"
+                  placeholder="${selectedParticipant.totalPoints}"
+                >
+                <span class="mgmt-score-hint" id="mgmt-bestweek-hint-${escapeHtml(selectedParticipant.id)}">Best of The Week atual: ${parseScoreNumber(selectedParticipant.categories?.bestWeek)} pts</span>
+              </label>
+            </div>
+
+            <div class="mgmt-participant-actions">
+              <button
+                type="button"
+                class="btn btn-primary"
+                data-mgmt-action="SAVE_PARTICIPANT_SCORES"
+                data-participant-id="${escapeHtml(selectedParticipant.id)}"
+              >
+                Salvar pontuação
+              </button>
+              <button
+                type="button"
+                class="btn btn-danger-ghost"
+                data-mgmt-action="REMOVE_PARTICIPANT"
+                data-participant-id="${escapeHtml(selectedParticipant.id)}"
+              >
+                Excluir participante
+              </button>
+            </div>
+          </article>
+        ` : `
+          <div class="mgmt-participant-empty">
+            Selecione um participante acima para abrir o editor de pontuação e gerenciamento.
           </div>
-        `).join('')}
+        `}
       </div>
     `;
     return;
@@ -668,10 +1206,20 @@ function renderManagementStep() {
 }
 
 function handleMgmtBack() {
-  if (mgmtFlow === 'ADD_PARTICIPANT' && mgmtStep > 0) {
-    mgmtStep--;
-    renderManagementStep();
+  if (mgmtFlow === 'ADD_PARTICIPANT') {
+    if (mgmtStep > 0) {
+      mgmtStep--;
+      renderManagementStep();
+      return;
+    }
+
+    openManagementHome();
   } else if (mgmtFlow === 'NEW_CYCLE') {
+    if (mgmtStep <= 0) {
+      openManagementHome();
+      return;
+    }
+
     if (mgmtData.currentCatIndex > 0) {
       mgmtData.currentCatIndex--;
     } else if (mgmtData.currentIndex > 0) {
@@ -680,10 +1228,63 @@ function handleMgmtBack() {
     }
     mgmtStep--;
     renderManagementStep();
+  } else if (mgmtFlow === 'MANAGE_PARTICIPANTS' || mgmtFlow === 'ADD_WEEKLY_FACT' || mgmtFlow === 'CALL_VAR') {
+    openManagementHome();
   }
 }
 
 async function handleMgmtNext() {
+  if (mgmtFlow === 'CALL_VAR') {
+    mgmtData.reporterId = $('#mgmt-var-reporter')?.value || '';
+    mgmtData.participantId = $('#mgmt-var-participant')?.value || '';
+    mgmtData.categoryKey = $('#mgmt-var-category')?.value || '';
+
+    if (!mgmtData.reporterId || !mgmtData.participantId || !mgmtData.categoryKey) {
+      window.alert('Selecione quem denuncia, qual participante será revisado e a categoria da meta.');
+      return;
+    }
+
+    const reportResult = reportParticipantObjective({
+      reporterId: mgmtData.reporterId,
+      participantId: mgmtData.participantId,
+      categoryKey: mgmtData.categoryKey,
+    });
+
+    if (!reportResult.ok) {
+      const messages = {
+        INVALID_INPUT: 'Não foi possível registrar a denúncia. Revise os campos e tente novamente.',
+        SELF_REPORT: 'A pessoa não pode denunciar a própria meta.',
+        NO_OBJECTIVE: 'Essa categoria está sem meta cadastrada no momento.',
+        DUPLICATE_REPORT: 'Essa pessoa já denunciou essa meta.',
+        ALREADY_FLAGGED: 'Essa meta já foi invalidada pelo VAR e está oculta até ser alterada.',
+        PARTICIPANT_NOT_FOUND: 'Participante não encontrado para registrar a denúncia.',
+      };
+
+      window.alert(messages[reportResult.reason] || 'Não foi possível registrar a denúncia.');
+      return;
+    }
+
+    const targetParticipant = getParticipantById(mgmtData.participantId);
+    const category = MGMT_CATEGORIES.find((item) => item.key === mgmtData.categoryKey);
+
+    createSnapshot(
+      reportResult.flagged
+        ? `VAR acionado: ${targetParticipant?.name || 'participante'} (${category?.title || mgmtData.categoryKey})`
+        : `Denúncia registrada: ${targetParticipant?.name || 'participante'} (${category?.title || mgmtData.categoryKey})`,
+    );
+
+    renderDashboard();
+    mgmtData.reporterId = '';
+    renderManagementStep();
+
+    window.alert(
+      reportResult.flagged
+        ? `Terceira denúncia registrada. A meta de ${targetParticipant?.name || 'participante'} agora aparece como "${OBJECTIVE_VAR_PLACEHOLDER}" até ser alterada.`
+        : `Denúncia registrada com sucesso. Essa meta está com ${reportResult.count}/${VAR_REPORT_THRESHOLD} denúncias.`,
+    );
+    return;
+  }
+
   if (mgmtFlow === 'ADD_WEEKLY_FACT') {
     mgmtData.date = $('#mgmt-weekly-date')?.value || '';
     mgmtData.bestParticipantId = $('#mgmt-best-participant')?.value || '';
@@ -814,6 +1415,7 @@ function startVotingSystem() {
   botwStep = 'SPEAKING';
   bestWinnerId = null;
   worstWinnerId = null;
+  pendingWeeklyFactEntry = null;
   navigationHistory = [];
   if ($('#weekly-facts-date')) $('#weekly-facts-date').value = formatDateForInput();
   if ($('#weekly-best-description')) $('#weekly-best-description').value = '';
@@ -881,8 +1483,9 @@ function renderVotingStep() {
     $('#modal-actions-speaker').style.display = 'flex';
     setNavigationActions({ skipLabel: 'Pular participante ausente' });
   } else {
+    const objectiveState = getObjectiveDisplayState(participant, category.key);
     $('#modal-objective-label').textContent = 'Objetivo da Semana:';
-    $('#modal-objective-text').textContent = participant.objectives[category.key];
+    $('#modal-objective-text').textContent = objectiveState.text;
     $('#modal-actions-voting').style.display = 'flex';
     $('#modal-actions-speaker').style.display = 'none';
     setNavigationActions({ skipLabel: 'Pular participante ausente' });
@@ -1186,7 +1789,9 @@ function showFinishScreen() {
   setAvatarContent($('#modal-avatar'), null, '✅');
   $('#modal-name').textContent = 'Todos os objetivos revisados';
   $('#modal-objective-label').textContent = 'Sincronização';
-  $('#modal-objective-text').textContent = 'Clique em finalizar para aplicar os pontos no ranking.';
+  $('#modal-objective-text').textContent = pendingWeeklyFactEntry
+    ? 'Clique em finalizar para aplicar os pontos no ranking e registrar os fatos da semana.'
+    : 'Clique em finalizar para aplicar os pontos no ranking.';
   $('#modal-actions-voting').style.display = 'none';
   $('#modal-actions-speaker').style.display = 'none';
   $('#modal-actions-finish').style.display = 'flex';
@@ -1206,7 +1811,7 @@ function handleSaveWeeklyFactHistory() {
     return;
   }
 
-  recordWeeklyFactHistory({
+  pendingWeeklyFactEntry = {
     id: date,
     date,
     best: {
@@ -1219,7 +1824,7 @@ function handleSaveWeeklyFactHistory() {
       label: worstWinner?.name || '',
       description: worstDescription,
     },
-  });
+  };
 
   if ($('#weekly-facts-date')) $('#weekly-facts-date').value = formatDateForInput();
   if ($('#weekly-best-description')) $('#weekly-best-description').value = '';
@@ -1227,7 +1832,6 @@ function handleSaveWeeklyFactHistory() {
 
   botwStep = 'SPEAKING';
   currentCategoryIndex += 1;
-  renderWeeklyFactHistory();
 
   if (currentCategoryIndex < CATEGORIES_ORDER.length) {
     prepareQueueForCategory(currentCategoryIndex);
@@ -1253,7 +1857,12 @@ async function finishVotingSystem() {
     voteDate: new Date().toISOString(),
   });
 
+  if (pendingWeeklyFactEntry) {
+    recordWeeklyFactHistory(pendingWeeklyFactEntry);
+  }
+
   createSnapshot('Votação finalizada');
+  pendingWeeklyFactEntry = null;
 
   $('#voting-modal').style.display = 'none';
   renderDashboard();
@@ -1269,100 +1878,59 @@ async function finishVotingSystem() {
 
 const GOALS_FORM_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
 
-// Deadline: 22/04/2026 às 23:59:59 no horário de Brasília (UTC-3)
-const GOALS_DEADLINE = new Date('2026-04-23T02:59:59Z'); // 23:59:59 BRT = 02:59:59 UTC next day
-
 let goalsStep = 0; // 0 = tutorial, 1 = form
 let goalsSelectedParticipantId = '';
 let goalsCountdownInterval = null;
 
 function getGoalsTimeRemaining() {
-  const now = new Date();
-  const diff = GOALS_DEADLINE.getTime() - now.getTime();
-  if (diff <= 0) return null;
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-  return { days, hours, minutes, seconds, total: diff };
+  return null;
 }
 
 function isGoalsWindowActive() {
-  return getGoalsTimeRemaining() !== null;
-}
-
-function formatCountdown(remaining) {
-  if (!remaining) return 'Encerrado';
-  const pad = (n) => String(n).padStart(2, '0');
-
-  if (remaining.days > 0) {
-    return `${remaining.days}d ${pad(remaining.hours)}h ${pad(remaining.minutes)}m`;
-  }
-  return `${pad(remaining.hours)}:${pad(remaining.minutes)}:${pad(remaining.seconds)}`;
+  return true;
 }
 
 function syncGoalsButtonState() {
-  const btn = $('#add-goals-btn');
-  const banner = $('#countdown-banner');
-  const statusEl = $('#countdown-status');
-  if (!btn) return;
+  const goalsActionBtn = $('#mgmt-goals-btn');
+  const goalsPanel = $('#mgmt-goals-panel');
+  const goalsChip = $('#mgmt-goals-chip');
+  const goalsStatus = $('#mgmt-goals-status');
+  const goalsMeta = $('#mgmt-goals-meta');
+  const goalsCountdown = $('#mgmt-goals-countdown');
 
-  const remaining = getGoalsTimeRemaining();
-  const active = remaining !== null;
-  const pad = (n) => String(n).padStart(2, '0');
-
-  btn.disabled = !active;
-
-  if (banner) {
-    banner.classList.toggle('countdown-active', active);
-    banner.classList.toggle('countdown-expired', !active);
+  if (goalsActionBtn) {
+    goalsActionBtn.textContent = 'Registrar metas';
   }
 
-  if (active) {
-    const d = $('#cd-days');
-    const h = $('#cd-hours');
-    const m = $('#cd-mins');
-    const s = $('#cd-secs');
-    if (d) d.textContent = pad(remaining.days);
-    if (h) h.textContent = pad(remaining.hours);
-    if (m) m.textContent = pad(remaining.minutes);
-    if (s) s.textContent = pad(remaining.seconds);
-    if (statusEl) statusEl.textContent = 'Aberto — encerra em 22/04 às 23:59';
-  } else {
-    const d = $('#cd-days');
-    const h = $('#cd-hours');
-    const m = $('#cd-mins');
-    const s = $('#cd-secs');
-    if (d) d.textContent = '00';
-    if (h) h.textContent = '00';
-    if (m) m.textContent = '00';
-    if (s) s.textContent = '00';
-    if (statusEl) statusEl.textContent = 'Encerrado — prazo expirado';
+  if (goalsPanel) {
+    goalsPanel.classList.add('is-open');
+    goalsPanel.classList.remove('is-closed');
   }
 
-  // Auto-close modal if deadline passed
-  if (!active && $('#goals-modal')?.style.display === 'flex') {
-    $('#goals-modal').style.display = 'none';
-    window.alert('O prazo para adicionar metas foi encerrado!');
+  if (goalsChip) {
+    goalsChip.textContent = 'Sempre aberto';
+    goalsChip.classList.add('is-open');
+    goalsChip.classList.remove('is-closed');
+  }
+
+  if (goalsStatus) {
+    goalsStatus.textContent = 'O registro de metas fica liberado o tempo todo.';
+  }
+
+  if (goalsMeta) {
+    goalsMeta.textContent = 'Os participantes podem criar ou editar as metas sempre que precisarem.';
+  }
+
+  if (goalsCountdown) {
+    goalsCountdown.hidden = true;
   }
 }
 
 function startGoalsCountdown() {
   syncGoalsButtonState();
-  if (goalsCountdownInterval) clearInterval(goalsCountdownInterval);
-  goalsCountdownInterval = setInterval(syncGoalsButtonState, 1000);
-}
-
-function toggleGoalsWindow() {
-  // Informational only now — deadline-based
-  const active = isGoalsWindowActive();
-  if (active) {
-    const remaining = getGoalsTimeRemaining();
-    window.alert(`A janela de metas está ABERTA!\n\nTempo restante: ${formatCountdown(remaining)}\n\nEncerra automaticamente em 22/04 às 23:59.`);
-  } else {
-    window.alert('A janela de metas está ENCERRADA.\n\nO prazo era até 22/04 às 23:59.');
+  if (goalsCountdownInterval) {
+    clearInterval(goalsCountdownInterval);
+    goalsCountdownInterval = null;
   }
 }
 
@@ -1427,7 +1995,7 @@ function renderGoalsStep() {
         </div>
 
         <div class="goals-tutorial-warn">
-          ⚠️ Você pode editar suas metas enquanto a janela estiver aberta.
+          ⚠️ Você pode criar ou editar suas metas sempre que precisar.
         </div>
       </div>
     `;
@@ -1456,6 +2024,7 @@ function renderGoalsStep() {
 
     const categoriesHtml = GOALS_FORM_CATEGORIES.map(cat => {
       const currentValue = selectedParticipant?.objectives?.[cat.key] || '';
+      const isFlagged = selectedParticipant ? isObjectiveVarFlagged(selectedParticipant, cat.key) : false;
       return `
         <div class="goals-category-group">
           <div class="goals-category-label">
@@ -1468,6 +2037,7 @@ function renderGoalsStep() {
             placeholder="Ex: Meta semanal para ${cat.title}..."
             ${!selectedParticipant ? 'disabled' : ''}
           >${escapeHtml(currentValue)}</textarea>
+          ${isFlagged ? '<div class="goals-category-warning">O VAR passou aqui. Altere o texto da meta para reativá-la.</div>' : ''}
         </div>
       `;
     }).join('');
@@ -1555,16 +2125,16 @@ function showParticipantGoals(participantId) {
   if (existing) existing.remove();
 
   const goalsHtml = PROFILE_CATEGORIES.map(cat => {
-    const value = participant.objectives?.[cat.key];
-    const hasGoal = value && String(value).trim() !== '';
+    const objectiveState = getObjectiveDisplayState(participant, cat.key);
     return `
-      <div class="profile-goal-item ${hasGoal ? '' : 'profile-goal-empty'}">
+      <div class="profile-goal-item ${objectiveState.hasGoal ? '' : 'profile-goal-empty'} ${objectiveState.flagged ? 'profile-goal-flagged' : ''}">
         <div class="profile-goal-header">
           <span class="profile-goal-icon">${cat.icon}</span>
           <span class="profile-goal-cat">${cat.title}</span>
           <span class="profile-goal-pts">${participant.categories[cat.key]} pts</span>
         </div>
-        <div class="profile-goal-text">${hasGoal ? escapeHtml(value) : 'Nenhuma meta registrada'}</div>
+        <div class="profile-goal-text">${escapeHtml(objectiveState.text)}</div>
+        ${objectiveState.flagged ? '<div class="profile-goal-flag-note">O VAR passou aqui. A meta só volta quando for alterada.</div>' : ''}
       </div>
     `;
   }).join('');

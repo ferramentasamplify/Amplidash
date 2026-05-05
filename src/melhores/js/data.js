@@ -16,6 +16,8 @@ import { INITIAL_PARTICIPANTS_DATA, cloneParticipants } from './shared.js';
 
 const STORAGE_KEY = 'amplify_melhores_v1';
 const WEEKLY_FACT_HISTORY_STORAGE_KEY = 'amplify_melhores_history_v1';
+const OBJECTIVE_CATEGORY_KEYS = ['exercicio', 'familia', 'alimentacao', 'hobbies', 'conhecimentos'];
+export const VAR_REPORT_THRESHOLD = 3;
 const REMOVED_PARTICIPANT_IDS = new Set(['vitor']);
 const PARTICIPANT_DEFAULTS_BY_ID = new Map(
   INITIAL_PARTICIPANTS_DATA.map((participant) => [participant.id, participant]),
@@ -116,6 +118,56 @@ function withTotals(participants) {
   }));
 }
 
+function normalizeObjectiveValue(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeScoreValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function createScoreBreakdownFromBestWeek(bestWeekValue) {
+  const bestWeek = normalizeScoreValue(bestWeekValue);
+  return {
+    melhorFato: bestWeek >= 0 ? bestWeek : 0,
+    piorFato: bestWeek < 0 ? bestWeek : 0,
+  };
+}
+
+function createEmptyObjectiveModeration() {
+  return OBJECTIVE_CATEGORY_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = { reporterIds: [], flagged: false };
+    return accumulator;
+  }, {});
+}
+
+function normalizeObjectiveModeration(value) {
+  const base = createEmptyObjectiveModeration();
+
+  for (const key of OBJECTIVE_CATEGORY_KEYS) {
+    const reporterIds = Array.isArray(value?.[key]?.reporterIds)
+      ? [...new Set(value[key].reporterIds.filter(Boolean).map(String))]
+      : [];
+
+    base[key] = {
+      reporterIds,
+      flagged: Boolean(value?.[key]?.flagged) || reporterIds.length >= VAR_REPORT_THRESHOLD,
+    };
+  }
+
+  return base;
+}
+
+function hydrateParticipantState(participants) {
+  return withTotals(
+    normalizeParticipantMetadata(participants).map((participant) => ({
+      ...participant,
+      objectiveModeration: normalizeObjectiveModeration(participant.objectiveModeration),
+    })),
+  );
+}
+
 /**
  * Garante que todo participante do INITIAL_PARTICIPANTS_DATA exista no array,
  * e preenche APENAS metadados visuais (name, handle, photoUrl) caso estejam
@@ -205,8 +257,7 @@ if (!participantState) {
   participantState = cloneParticipants(INITIAL_PARTICIPANTS_DATA);
 }
 
-participantState = normalizeParticipantMetadata(participantState);
-participantState = withTotals(participantState);
+participantState = hydrateParticipantState(participantState);
 
 let weeklyFactHistory = normalizeWeeklyFactHistory(readStoredWeeklyFactHistory() || []);
 
@@ -243,8 +294,7 @@ export async function loadParticipantsData() {
     // Server tem dados — usar como fonte da verdade
     _skipSync = true;
 
-    participantState = normalizeParticipantMetadata(serverData.participants);
-    participantState = withTotals(participantState);
+    participantState = hydrateParticipantState(serverData.participants);
     weeklyFactHistory = normalizeWeeklyFactHistory(serverData.weeklyFactHistory || []);
 
     // Atualiza cache local
@@ -256,8 +306,7 @@ export async function loadParticipantsData() {
     // Server vazio — usar dados locais + migrar para o servidor
     const local = readStoredState();
     if (local && local.length > 0) {
-      participantState = normalizeParticipantMetadata(local);
-      participantState = withTotals(participantState);
+      participantState = hydrateParticipantState(local);
       weeklyFactHistory = normalizeWeeklyFactHistory(readStoredWeeklyFactHistory() || []);
       // Migrar para o servidor
       scheduleSyncToServer();
@@ -370,6 +419,7 @@ export function addParticipant({ name, handle, photoUrl, objectives }) {
       hobbies: objectives.hobbies || '',
       conhecimentos: objectives.conhecimentos || '',
     },
+    objectiveModeration: createEmptyObjectiveModeration(),
     scoreBreakdown: {
       melhorFato: 0,
       piorFato: 0,
@@ -396,16 +446,126 @@ export function removeParticipant(id) {
 export function updateParticipantObjectives(id, objectives) {
   participantState = participantState.map((p) => {
     if (p.id !== id) return p;
+
+    const nextObjectiveModeration = normalizeObjectiveModeration(p.objectiveModeration);
+
+    for (const [key, nextValue] of Object.entries(objectives || {})) {
+      if (!OBJECTIVE_CATEGORY_KEYS.includes(key)) continue;
+
+      const previousValue = normalizeObjectiveValue(p.objectives?.[key]);
+      const incomingValue = normalizeObjectiveValue(nextValue);
+
+      if (previousValue !== incomingValue) {
+        nextObjectiveModeration[key] = { reporterIds: [], flagged: false };
+      }
+    }
+
     return {
       ...p,
       objectives: {
         ...p.objectives,
         ...objectives,
       },
+      objectiveModeration: nextObjectiveModeration,
     };
   });
   writeStoredState(participantState);
   return participantState;
+}
+
+export function updateParticipantScores(id, categories) {
+  participantState = withTotals(participantState.map((participant) => {
+    if (participant.id !== id) return participant;
+
+    const nextCategories = {
+      ...participant.categories,
+      exercicio: normalizeScoreValue(categories?.exercicio),
+      familia: normalizeScoreValue(categories?.familia),
+      alimentacao: normalizeScoreValue(categories?.alimentacao),
+      hobbies: normalizeScoreValue(categories?.hobbies),
+      conhecimentos: normalizeScoreValue(categories?.conhecimentos),
+      bestWeek: normalizeScoreValue(categories?.bestWeek),
+    };
+
+    return {
+      ...participant,
+      categories: nextCategories,
+      scoreBreakdown: createScoreBreakdownFromBestWeek(nextCategories.bestWeek),
+    };
+  }));
+
+  writeStoredState(participantState);
+  return participantState;
+}
+
+export function reportParticipantObjective({ reporterId, participantId, categoryKey }) {
+  if (!reporterId || !participantId || !OBJECTIVE_CATEGORY_KEYS.includes(categoryKey)) {
+    return { ok: false, reason: 'INVALID_INPUT' };
+  }
+
+  if (reporterId === participantId) {
+    return { ok: false, reason: 'SELF_REPORT' };
+  }
+
+  let result = { ok: false, reason: 'PARTICIPANT_NOT_FOUND' };
+
+  participantState = participantState.map((participant) => {
+    if (participant.id !== participantId) return participant;
+
+    const objectiveValue = normalizeObjectiveValue(participant.objectives?.[categoryKey]);
+    if (!objectiveValue) {
+      result = { ok: false, reason: 'NO_OBJECTIVE' };
+      return participant;
+    }
+
+    const nextObjectiveModeration = normalizeObjectiveModeration(participant.objectiveModeration);
+    const currentReview = nextObjectiveModeration[categoryKey];
+
+    if (currentReview.flagged || currentReview.reporterIds.length >= VAR_REPORT_THRESHOLD) {
+      result = {
+        ok: false,
+        reason: 'ALREADY_FLAGGED',
+        count: currentReview.reporterIds.length,
+      };
+      return participant;
+    }
+
+    if (currentReview.reporterIds.includes(reporterId)) {
+      result = {
+        ok: false,
+        reason: 'DUPLICATE_REPORT',
+        count: currentReview.reporterIds.length,
+      };
+      return participant;
+    }
+
+    const reporterIds = [...currentReview.reporterIds, reporterId];
+    const flagged = reporterIds.length >= VAR_REPORT_THRESHOLD;
+
+    nextObjectiveModeration[categoryKey] = {
+      reporterIds,
+      flagged,
+    };
+
+    result = {
+      ok: true,
+      count: reporterIds.length,
+      flagged,
+      reporterIds,
+    };
+
+    return {
+      ...participant,
+      objectiveModeration: nextObjectiveModeration,
+    };
+  });
+
+  if (!result.ok) {
+    return result;
+  }
+
+  writeStoredState(participantState);
+  return result;
 }
 
 /**
@@ -430,6 +590,7 @@ export async function resetAllScores() {
       hobbies: '',
       conhecimentos: '',
     },
+    objectiveModeration: createEmptyObjectiveModeration(),
     scoreBreakdown: {
       melhorFato: 0,
       piorFato: 0,
@@ -519,8 +680,8 @@ export async function restoreSnapshot(snapshotId) {
     if (!data.ok) return false;
 
     _skipSync = true;
-    participantState = withTotals(data.participants || []);
-    weeklyFactHistory = data.weeklyFactHistory || [];
+    participantState = hydrateParticipantState(data.participants || []);
+    weeklyFactHistory = normalizeWeeklyFactHistory(data.weeklyFactHistory || []);
     writeStoredState(participantState);
     writeStoredWeeklyFactHistory(weeklyFactHistory);
     _skipSync = false;

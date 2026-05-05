@@ -7,7 +7,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/src/melhores/css/styles.css" />
+  <link rel="stylesheet" href="/src/melhores/css/pdf.css" />
 </head>
 <body>
   <!-- Header -->
@@ -22,6 +24,17 @@
             <h1 class="header-title">Best of the week</h1>
             <p class="header-subtitle">Melhor dos melhores</p>
           </div>
+        </div>
+        <div class="header-meta">
+          <button id="download-pdf-btn" class="btn-pdf" title="Baixar PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span class="btn-text">PDF</span>
+          </button>
         </div>
       </div>
     </div>
@@ -44,59 +57,10 @@
             <span class="btn-label">Zerar pontuação</span>
           </button>
           
-          <div class="dropdown">
-            <button id="manage-btn" class="btn btn-secondary btn-cta">
+          <button id="manage-btn" class="btn btn-secondary btn-cta" type="button" aria-haspopup="dialog" aria-controls="management-modal">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
               <span class="btn-label">Gerenciar</span>
-            </button>
-            <div class="dropdown-content" id="manage-dropdown">
-              <button id="add-voter-btn">➕ Adicionar novo participante</button>
-              <button id="manage-participants-btn">🗑️ Gerenciar participantes</button>
-              <button id="add-weekly-fact-btn">📝 Adicionar melhor e pior fato da semana</button>
-              <button id="toggle-goals-btn">🎯 Abrir/Fechar janela de metas</button>
-              <button id="new-cycle-btn">🚀 Iniciar novo melhores</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Countdown Banner -->
-      <div class="countdown-banner" id="countdown-banner">
-        <div class="countdown-inner">
-          <div class="countdown-left">
-            <div class="countdown-icon">🎯</div>
-            <div class="countdown-copy">
-              <div class="countdown-title">Registro de metas</div>
-              <div class="countdown-subtitle" id="countdown-status">Aberto — encerra em 22/04 às 23:59</div>
-            </div>
-          </div>
-          <div class="countdown-center">
-            <div class="countdown-block">
-              <span class="countdown-value" id="cd-days">00</span>
-              <span class="countdown-label">dias</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-block">
-              <span class="countdown-value" id="cd-hours">00</span>
-              <span class="countdown-label">horas</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-block">
-              <span class="countdown-value" id="cd-mins">00</span>
-              <span class="countdown-label">min</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-block">
-              <span class="countdown-value" id="cd-secs">00</span>
-              <span class="countdown-label">seg</span>
-            </div>
-          </div>
-          <div class="countdown-right">
-            <button id="add-goals-btn" class="btn btn-goals-action" disabled>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              Registrar metas
-            </button>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -304,13 +268,13 @@
           <div class="rule-card" onclick="this.classList.toggle('rule-open')">
             <div class="rule-header">
               <span class="rule-num">3</span>
-              <h3 class="rule-title">Não cadastrou meta no prazo? Dançou</h3>
+              <h3 class="rule-title">Meta em branco pesa no placar</h3>
               <span class="rule-toggle">+</span>
             </div>
             <div class="rule-body">
-              <p>Se o participante não registrar as metas até a data final definida no <strong>PE</strong>, fica de fora até o próximo reinício do game.</p>
-              <p>Além disso, não poderá participar dos eventos do The Best e ainda poderá receber uma punição avaliada pela diretoria.</p>
-              <p><strong>Mas calma:</strong> imprevistos acontecem. Se tiver um motivo plausível, troca uma ideia com a diretoria. O caos é aceito, o sumiço misterioso não.</p>
+              <p>O registro de metas fica <strong>sempre aberto</strong>, então cada participante pode cadastrar ou ajustar as metas quando precisar.</p>
+              <p>Se alguma categoria ficar sem meta, ela contabiliza <strong>–2 pontos</strong> na soma da semana até ser preenchida.</p>
+              <p><strong>Resumo:</strong> não tem bloqueio por prazo, mas vale manter tudo atualizado para não perder pontos à toa.</p>
             </div>
           </div>
 
@@ -515,7 +479,7 @@
       </div>
 
       <div class="modal-actions" id="modal-actions-history" style="display: none;">
-         <button class="btn btn-primary btn-finish" id="btn-save-history">Salvar fatos e continuar</button>
+         <button class="btn btn-primary btn-finish" id="btn-save-history">Continuar para finalizar</button>
       </div>
     </div>
   </div>
@@ -562,6 +526,32 @@
       <div class="modal-actions" id="goals-modal-actions">
         <button class="btn btn-secondary" id="goals-btn-back" style="display: none;">Voltar</button>
         <button class="btn btn-primary" id="goals-btn-next">Começar a registrar minhas metas</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Export Container (Visually Hidden) -->
+  <div id="pdf-report-container" class="pdf-export-only">
+    <div class="pdf-container">
+      <header class="pdf-header">
+        <img src="/LOGOAMPLI.png" alt="Amplify" class="pdf-logo" />
+        <div class="pdf-title-area">
+          <h1 class="pdf-main-title">Report de Melhores</h1>
+          <div class="pdf-date-range" id="pdf-date-range-text">Rodada atual</div>
+        </div>
+      </header>
+
+      <div class="pdf-content-simple">
+        <section class="pdf-overall-card" id="pdf-overall-winner">
+          <!-- Instantiated via JS -->
+        </section>
+
+        <section class="pdf-section">
+          <h2 class="pdf-section-title">Campeões por categoria</h2>
+          <div class="pdf-champions-grid" id="pdf-category-champions">
+            <!-- Instantiated via JS -->
+          </div>
+        </section>
       </div>
     </div>
   </div>

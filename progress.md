@@ -17,3 +17,10 @@ Original prompt: Integrar `src/melhores/` ao Notion oficial do "The Best", sincr
 - 2026-04-02: otimizado visualmente o pop-up manual de histórico semanal, com modal mais largo, painel de introdução, coluna de data dedicada e cards separados para melhor/pior fato.
 - 2026-04-02: simplificada a votação de objetivos para apenas duas opções visuais: `💩` valendo `0` e `⭐` valendo `1`, removendo o botão de `-2`.
 - 2026-04-02: Vitor removido da base fixa do jogo e também filtrado do `localStorage` ao carregar, para não reaparecer no dashboard nem nas votações.
+
+- 2026-05-05: adicionado botão de exportar PDF no header do /melhores, com template oculto de relatório e geração adaptada ao ranking geral/top 3 da rodada.
+- 2026-05-05: o PDF do /melhores agora resume participantes, pontos acumulados, média por participante, total de Best of The Week e gráfico Top 10.
+- 2026-05-05: `npm run build` validado após a implementação do PDF no /melhores.
+- 2026-05-05: validação visual automatizada do /melhores bloqueada porque o pacote `playwright` não está disponível no ambiente atual do skill develop-web-game.
+- 2026-05-05: PDF do /melhores simplificado para mostrar apenas o campeão geral e os campeões das 6 categorias, removendo gráfico, top 3 e resumos extras.
+- 2026-05-05: o histórico de melhor/pior fato do jogo agora só é persistido ao clicar em `Finalizar Votação`; antes disso a entrada fica apenas pendente no fluxo final.
