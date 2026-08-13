@@ -1567,7 +1567,7 @@ function renderVotingStep() {
     $('#modal-objective-text').textContent = objectiveState.text;
     $('#modal-actions-voting').style.display = 'flex';
     $('#modal-actions-speaker').style.display = 'none';
-    setNavigationActions({ skipLabel: 'Pular participante ausente' });
+    setNavigationActions({ skipLabel: 'Participante ausente (-1)' });
   }
 
   $('#modal-actions-finish').style.display = 'none';
@@ -1813,7 +1813,7 @@ function handleSkipStep() {
     return;
   }
 
-  handleVote(0);
+  handleVote(-1);
 }
 
 function showWeeklyFactCaptureStep() {
