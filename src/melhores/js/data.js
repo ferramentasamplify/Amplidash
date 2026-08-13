@@ -16,9 +16,10 @@ import { INITIAL_PARTICIPANTS_DATA, cloneParticipants } from './shared.js';
 
 const STORAGE_KEY = 'amplify_melhores_v1';
 const WEEKLY_FACT_HISTORY_STORAGE_KEY = 'amplify_melhores_history_v1';
+const REMOVED_PARTICIPANTS_STORAGE_KEY = 'amplify_melhores_removed_participants_v1';
 const OBJECTIVE_CATEGORY_KEYS = ['exercicio', 'familia', 'alimentacao', 'hobbies', 'conhecimentos'];
 export const VAR_REPORT_THRESHOLD = 3;
-const REMOVED_PARTICIPANT_IDS = new Set(['vitor']);
+const DEFAULT_REMOVED_PARTICIPANT_IDS = ['vitor'];
 const PARTICIPANT_DEFAULTS_BY_ID = new Map(
   INITIAL_PARTICIPANTS_DATA.map((participant) => [participant.id, participant]),
 );
@@ -73,6 +74,34 @@ function writeStoredWeeklyFactHistory(entries) {
   scheduleSyncToServer();
 }
 
+function normalizeRemovedParticipantIds(ids) {
+  return new Set([
+    ...DEFAULT_REMOVED_PARTICIPANT_IDS,
+    ...(Array.isArray(ids) ? ids.filter(Boolean).map(String) : []),
+  ]);
+}
+
+function readStoredRemovedParticipantIds() {
+  if (!isStorageAvailable()) return normalizeRemovedParticipantIds();
+  try {
+    const raw = window.localStorage.getItem(REMOVED_PARTICIPANTS_STORAGE_KEY);
+    return normalizeRemovedParticipantIds(raw ? JSON.parse(raw) : []);
+  } catch (error) {
+    console.error('Error reading removed participants from local storage:', error);
+    return normalizeRemovedParticipantIds();
+  }
+}
+
+function writeStoredRemovedParticipantIds(ids = removedParticipantIds) {
+  if (!isStorageAvailable()) return;
+  try {
+    window.localStorage.setItem(REMOVED_PARTICIPANTS_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch (error) {
+    console.error('Error writing removed participants to local storage:', error);
+  }
+  scheduleSyncToServer();
+}
+
 // ---------------------------------------------------------------------------
 // Server sync layer — Netlify Blobs via API
 // ---------------------------------------------------------------------------
@@ -91,6 +120,7 @@ function scheduleSyncToServer() {
       body: JSON.stringify({
         participants: participantState,
         weeklyFactHistory,
+        removedParticipantIds: [...removedParticipantIds],
       }),
     }).catch((err) => console.warn('[sync] Server sync failed:', err.message));
   }, 400);
@@ -178,13 +208,13 @@ function normalizeParticipantMetadata(participants) {
 
   // Adiciona participantes que existem nos padrões mas não estão no state salvo
   for (const [id, defaultData] of PARTICIPANT_DEFAULTS_BY_ID.entries()) {
-    if (!existingIds.has(id) && !REMOVED_PARTICIPANT_IDS.has(id)) {
+    if (!existingIds.has(id) && !removedParticipantIds.has(id)) {
       participants.push(cloneParticipants([defaultData])[0]);
     }
   }
 
   return participants
-    .filter((participant) => !REMOVED_PARTICIPANT_IDS.has(participant.id))
+    .filter((participant) => !removedParticipantIds.has(participant.id))
     .map((participant) => {
       const defaults = PARTICIPANT_DEFAULTS_BY_ID.get(participant.id);
 
@@ -251,6 +281,7 @@ function normalizeWeeklyFactHistory(entries) {
 // Start with localStorage cache for instant render (sync happens in loadParticipantsData)
 _skipSync = true;
 
+let removedParticipantIds = readStoredRemovedParticipantIds();
 let participantState = readStoredState();
 
 if (!participantState) {
@@ -294,10 +325,12 @@ export async function loadParticipantsData() {
     // Server tem dados — usar como fonte da verdade
     _skipSync = true;
 
+    removedParticipantIds = normalizeRemovedParticipantIds(serverData.removedParticipantIds);
     participantState = hydrateParticipantState(serverData.participants);
     weeklyFactHistory = normalizeWeeklyFactHistory(serverData.weeklyFactHistory || []);
 
     // Atualiza cache local
+    writeStoredRemovedParticipantIds(removedParticipantIds);
     writeStoredState(participantState);
     writeStoredWeeklyFactHistory(weeklyFactHistory);
 
@@ -306,6 +339,7 @@ export async function loadParticipantsData() {
     // Server vazio — usar dados locais + migrar para o servidor
     const local = readStoredState();
     if (local && local.length > 0) {
+      removedParticipantIds = readStoredRemovedParticipantIds();
       participantState = hydrateParticipantState(local);
       weeklyFactHistory = normalizeWeeklyFactHistory(readStoredWeeklyFactHistory() || []);
       // Migrar para o servidor
@@ -399,6 +433,9 @@ export function recordWeeklyFactHistory(entry) {
  */
 export function addParticipant({ name, handle, photoUrl, objectives }) {
   const id = name.toLowerCase().replace(/\s+/g, '-');
+  removedParticipantIds.delete(id);
+  writeStoredRemovedParticipantIds(removedParticipantIds);
+
   const newParticipant = {
     id,
     name,
@@ -435,6 +472,8 @@ export function addParticipant({ name, handle, photoUrl, objectives }) {
  * Remove um participante e salva imediatamente.
  */
 export function removeParticipant(id) {
+  removedParticipantIds.add(String(id));
+  writeStoredRemovedParticipantIds(removedParticipantIds);
   participantState = participantState.filter((p) => p.id !== id);
   writeStoredState(participantState);
   return participantState;
@@ -648,6 +687,7 @@ export function createSnapshot(description = 'Salvamento manual') {
       description,
       participants: participantState,
       weeklyFactHistory,
+      removedParticipantIds: [...removedParticipantIds],
     }),
   }).catch((err) => console.warn('[saves] Create failed:', err.message));
 }
@@ -680,8 +720,10 @@ export async function restoreSnapshot(snapshotId) {
     if (!data.ok) return false;
 
     _skipSync = true;
+    removedParticipantIds = normalizeRemovedParticipantIds(data.removedParticipantIds);
     participantState = hydrateParticipantState(data.participants || []);
     weeklyFactHistory = normalizeWeeklyFactHistory(data.weeklyFactHistory || []);
+    writeStoredRemovedParticipantIds(removedParticipantIds);
     writeStoredState(participantState);
     writeStoredWeeklyFactHistory(weeklyFactHistory);
     _skipSync = false;

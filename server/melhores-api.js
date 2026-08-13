@@ -1,6 +1,11 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'melhores-game';
+const EMPTY_GAME_STATE = {
+  participants: [],
+  weeklyFactHistory: [],
+  removedParticipantIds: [],
+};
 
 function corsHeaders() {
   return {
@@ -23,8 +28,15 @@ function respond(payload, status = 200) {
 async function getGameState() {
   const store = getStore(STORE_NAME);
   const raw = await store.get('game-state');
-  if (!raw) return { participants: [], weeklyFactHistory: [] };
-  try { return JSON.parse(raw); } catch { return { participants: [], weeklyFactHistory: [] }; }
+  if (!raw) return { ...EMPTY_GAME_STATE };
+  try {
+    return {
+      ...EMPTY_GAME_STATE,
+      ...JSON.parse(raw),
+    };
+  } catch {
+    return { ...EMPTY_GAME_STATE };
+  }
 }
 
 async function setGameState(state) {
@@ -58,6 +70,7 @@ export async function handleMelhoresStateRequest() {
       ok: true,
       participants: state.participants || [],
       weeklyFactHistory: state.weeklyFactHistory || [],
+      removedParticipantIds: state.removedParticipantIds || [],
       source: 'server',
     });
   } catch (error) {
@@ -76,6 +89,7 @@ export async function handleMelhoresApplyRequest(body = {}) {
 
     if (body.participants !== undefined) current.participants = body.participants;
     if (body.weeklyFactHistory !== undefined) current.weeklyFactHistory = body.weeklyFactHistory;
+    if (body.removedParticipantIds !== undefined) current.removedParticipantIds = body.removedParticipantIds;
 
     await setGameState(current);
     return respond({ ok: true, source: 'server' });
@@ -90,7 +104,7 @@ export async function handleMelhoresApplyRequest(body = {}) {
  */
 export async function handleMelhoresResetRequest() {
   try {
-    await setGameState({ participants: [], weeklyFactHistory: [] });
+    await setGameState({ ...EMPTY_GAME_STATE });
     return respond({ ok: true, source: 'server' });
   } catch (error) {
     console.error('[reset] Error:', error);
@@ -122,6 +136,7 @@ export async function handleMelhoresSavesRequest(body = {}, method = 'GET') {
         description: body.description || 'Salvamento manual',
         participants: body.participants || [],
         weeklyFactHistory: body.weeklyFactHistory || [],
+        removedParticipantIds: body.removedParticipantIds || [],
       };
       saves.unshift(snapshot);
       if (saves.length > 50) saves.length = 50;
@@ -149,6 +164,7 @@ export async function handleMelhoresSavesRequest(body = {}, method = 'GET') {
         description: 'Backup antes de restauração',
         participants: currentState.participants || [],
         weeklyFactHistory: currentState.weeklyFactHistory || [],
+        removedParticipantIds: currentState.removedParticipantIds || [],
       });
       if (saves.length > 50) saves.length = 50;
       await setSaves(saves);
@@ -157,12 +173,14 @@ export async function handleMelhoresSavesRequest(body = {}, method = 'GET') {
       await setGameState({
         participants: snapshot.participants || [],
         weeklyFactHistory: snapshot.weeklyFactHistory || [],
+        removedParticipantIds: snapshot.removedParticipantIds || [],
       });
 
       return respond({
         ok: true,
         participants: snapshot.participants || [],
         weeklyFactHistory: snapshot.weeklyFactHistory || [],
+        removedParticipantIds: snapshot.removedParticipantIds || [],
       });
     }
 
