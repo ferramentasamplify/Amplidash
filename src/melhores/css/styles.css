@@ -948,6 +948,34 @@ body::before {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
 }
+.mgmt-file-input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 8, 20, 0.52);
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+}
+.mgmt-file-input::file-selector-button {
+  margin-right: 12px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mgmt-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
 .mgmt-participant-empty {
   width: min(100%, 760px);
   padding: 34px 24px;

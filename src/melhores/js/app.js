@@ -137,15 +137,55 @@ function calculateParticipantScoreTotal(categories = {}) {
   );
 }
 
-function normalizePhotoUrlInput(value = '') {
-  let rawPhotoUrl = String(value || '').trim();
-  const gDriveMatch = rawPhotoUrl.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*id=)([a-zA-Z0-9_-]+)/);
+const PROFILE_PHOTO_MAX_SIZE = 640;
+const PROFILE_PHOTO_QUALITY = 0.82;
 
-  if (gDriveMatch && gDriveMatch[1]) {
-    rawPhotoUrl = `https://drive.google.com/thumbnail?id=${gDriveMatch[1]}&sz=w1000`;
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Não foi possível ler a imagem.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Não foi possível carregar a imagem selecionada.'));
+    image.src = dataUrl;
+  });
+}
+
+async function resizeProfilePhotoFile(file) {
+  if (!file) return '';
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Selecione um arquivo de imagem válido.');
   }
 
-  return rawPhotoUrl;
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImageFromDataUrl(source);
+  const ratio = Math.min(PROFILE_PHOTO_MAX_SIZE / image.width, PROFILE_PHOTO_MAX_SIZE / image.height, 1);
+  const width = Math.max(1, Math.round(image.width * ratio));
+  const height = Math.max(1, Math.round(image.height * ratio));
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  return canvas.toDataURL('image/jpeg', PROFILE_PHOTO_QUALITY);
+}
+
+async function getPhotoValueFromUpload({ input, currentPhotoUrl = '', removeCheckbox = null } = {}) {
+  if (removeCheckbox?.checked) return '';
+
+  const file = input?.files?.[0];
+  if (!file) return currentPhotoUrl;
+
+  return resizeProfilePhotoFile(file);
 }
 
 function getParticipantPhotoUrl(participant) {
@@ -669,14 +709,25 @@ function updateParticipantScorePreview(participantId) {
   }
 }
 
-function handleSaveParticipantScores(participantId) {
+async function handleSaveParticipantScores(participantId) {
   const participant = getParticipantById(participantId);
   if (!participant) {
     window.alert('Participante não encontrado para salvar as alterações.');
     return;
   }
 
-  const photoUrl = normalizePhotoUrlInput($(`#mgmt-photo-${participantId}`)?.value || '');
+  let photoUrl = getParticipantPhotoUrl(participant);
+  try {
+    photoUrl = await getPhotoValueFromUpload({
+      input: $(`#mgmt-photo-${participantId}`),
+      currentPhotoUrl: photoUrl,
+      removeCheckbox: $(`#mgmt-remove-photo-${participantId}`),
+    });
+  } catch (error) {
+    window.alert(error.message || 'Não foi possível processar a imagem selecionada.');
+    return;
+  }
+
   const categories = {
     exercicio: parseScoreNumber($(`#mgmt-score-${participantId}-exercicio`)?.value),
     familia: parseScoreNumber($(`#mgmt-score-${participantId}-familia`)?.value),
@@ -1036,13 +1087,18 @@ function renderManagementStep() {
             <label class="mgmt-profile-photo-field">
               <span class="mgmt-score-label">Foto de perfil</span>
               <input
-                type="url"
-                class="mgmt-input"
+                type="file"
+                accept="image/*"
+                class="mgmt-file-input"
                 id="mgmt-photo-${escapeHtml(selectedParticipant.id)}"
-                value="${escapeHtml(getParticipantPhotoUrl(selectedParticipant))}"
-                placeholder="Cole uma URL de imagem ou link do Google Drive"
               >
-              <span class="mgmt-score-hint">Deixe em branco para usar as iniciais do participante.</span>
+              <span class="mgmt-score-hint">A imagem será ajustada automaticamente antes de salvar.</span>
+              ${getParticipantPhotoUrl(selectedParticipant) ? `
+                <label class="mgmt-inline-check">
+                  <input type="checkbox" id="mgmt-remove-photo-${escapeHtml(selectedParticipant.id)}">
+                  <span>Remover foto atual</span>
+                </label>
+              ` : ''}
             </label>
 
             <div class="mgmt-score-grid">
@@ -1191,8 +1247,9 @@ function renderManagementStep() {
           <input type="text" id="mgmt-handle" class="mgmt-input" placeholder="Ex: @joao" value="${mgmtData.handle}">
         </div>
         <div class="mgmt-form-group">
-          <label>Foto (Link Direto ou Google Drive)</label>
-          <input type="text" id="mgmt-photoUrl" class="mgmt-input" placeholder="Ex: https://drive.google.com/file/d/..." value="${mgmtData.photoUrl || ''}">
+          <label>Foto de perfil</label>
+          <input type="file" id="mgmt-photoFile" class="mgmt-file-input" accept="image/*">
+          <span class="mgmt-score-hint">Opcional. A imagem será ajustada automaticamente antes de salvar.</span>
         </div>
       `;
     } else if (mgmtStep <= MGMT_CATEGORIES.length) {
@@ -1357,7 +1414,12 @@ async function handleMgmtNext() {
     if (mgmtStep === 0) {
       mgmtData.name = $('#mgmt-name').value.trim();
       mgmtData.handle = $('#mgmt-handle').value.trim();
-      mgmtData.photoUrl = normalizePhotoUrlInput($('#mgmt-photoUrl')?.value || '');
+      try {
+        mgmtData.photoUrl = await getPhotoValueFromUpload({ input: $('#mgmt-photoFile') });
+      } catch (error) {
+        window.alert(error.message || 'Não foi possível processar a imagem selecionada.');
+        return;
+      }
 
       if (!mgmtData.name || !mgmtData.handle) return alert('Preencha os campos obrigatórios');
       mgmtStep++;
