@@ -19,7 +19,7 @@ const WEEKLY_FACT_HISTORY_STORAGE_KEY = 'amplify_melhores_history_v1';
 const REMOVED_PARTICIPANTS_STORAGE_KEY = 'amplify_melhores_removed_participants_v1';
 const OBJECTIVE_CATEGORY_KEYS = ['exercicio', 'familia', 'alimentacao', 'hobbies', 'conhecimentos'];
 export const VAR_REPORT_THRESHOLD = 3;
-const DEFAULT_REMOVED_PARTICIPANT_IDS = ['vitor'];
+const DEFAULT_REMOVED_PARTICIPANT_IDS = [];
 const PARTICIPANT_DEFAULTS_BY_ID = new Map(
   INITIAL_PARTICIPANTS_DATA.map((participant) => [participant.id, participant]),
 );
