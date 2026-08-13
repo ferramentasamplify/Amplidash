@@ -19,6 +19,7 @@ import {
   restoreSnapshot,
   resetAllScores,
   updateParticipantObjectives,
+  updateParticipantProfile,
   updateParticipantScores,
   VAR_REPORT_THRESHOLD,
 } from './data.js';
@@ -134,6 +135,17 @@ function calculateParticipantScoreTotal(categories = {}) {
     (total, category) => total + parseScoreNumber(categories[category.key]),
     0,
   );
+}
+
+function normalizePhotoUrlInput(value = '') {
+  let rawPhotoUrl = String(value || '').trim();
+  const gDriveMatch = rawPhotoUrl.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*id=)([a-zA-Z0-9_-]+)/);
+
+  if (gDriveMatch && gDriveMatch[1]) {
+    rawPhotoUrl = `https://drive.google.com/thumbnail?id=${gDriveMatch[1]}&sz=w1000`;
+  }
+
+  return rawPhotoUrl;
 }
 
 function getParticipantPhotoUrl(participant) {
@@ -660,10 +672,11 @@ function updateParticipantScorePreview(participantId) {
 function handleSaveParticipantScores(participantId) {
   const participant = getParticipantById(participantId);
   if (!participant) {
-    window.alert('Participante não encontrado para salvar a pontuação.');
+    window.alert('Participante não encontrado para salvar as alterações.');
     return;
   }
 
+  const photoUrl = normalizePhotoUrlInput($(`#mgmt-photo-${participantId}`)?.value || '');
   const categories = {
     exercicio: parseScoreNumber($(`#mgmt-score-${participantId}-exercicio`)?.value),
     familia: parseScoreNumber($(`#mgmt-score-${participantId}-familia`)?.value),
@@ -687,11 +700,12 @@ function handleSaveParticipantScores(participantId) {
     categories.bestWeek = parseScoreNumber(totalOverrideRaw) - baseWithoutBestWeek;
   }
 
+  updateParticipantProfile(participantId, { photoUrl });
   updateParticipantScores(participantId, categories);
-  createSnapshot(`Pontuação ajustada: ${participant.name}`);
+  createSnapshot(`Participante atualizado: ${participant.name}`);
   renderDashboard();
   renderManagementStep();
-  window.alert(`Pontuação de ${participant.name} atualizada com sucesso.`);
+  window.alert(`Dados de ${participant.name} atualizados com sucesso.`);
 }
 
 function startAddWeeklyFactFlow() {
@@ -984,7 +998,7 @@ function renderManagementStep() {
           <span class="mgmt-weekly-eyebrow">Editor de pontuação</span>
           <h4 class="mgmt-weekly-title">Gerenciar participantes</h4>
           <p class="mgmt-weekly-copy">
-            Escolha primeiro quem você quer editar. Depois, ajuste pontuações por categoria, confira o total final e exclua o participante se precisar.
+            Escolha primeiro quem você quer editar. Depois, ajuste foto, pontuações por categoria, confira o total final e exclua o participante se precisar.
           </p>
         </section>
 
@@ -999,7 +1013,7 @@ function renderManagementStep() {
             `).join('')}
           </select>
           <p class="mgmt-participants-picker-copy">
-            Ao selecionar alguém, o editor de pontuação aparece logo abaixo com todas as categorias e o total final.
+            Ao selecionar alguém, o editor aparece logo abaixo com foto, categorias e total final.
           </p>
         </section>
 
@@ -1018,6 +1032,18 @@ function renderManagementStep() {
                 <strong class="mgmt-participant-total-value" id="mgmt-total-preview-${escapeHtml(selectedParticipant.id)}">${selectedParticipant.totalPoints} pts</strong>
               </div>
             </div>
+
+            <label class="mgmt-profile-photo-field">
+              <span class="mgmt-score-label">Foto de perfil</span>
+              <input
+                type="url"
+                class="mgmt-input"
+                id="mgmt-photo-${escapeHtml(selectedParticipant.id)}"
+                value="${escapeHtml(getParticipantPhotoUrl(selectedParticipant))}"
+                placeholder="Cole uma URL de imagem ou link do Google Drive"
+              >
+              <span class="mgmt-score-hint">Deixe em branco para usar as iniciais do participante.</span>
+            </label>
 
             <div class="mgmt-score-grid">
               ${SCORE_EDIT_CATEGORIES.map((category) => `
@@ -1065,7 +1091,7 @@ function renderManagementStep() {
                 data-mgmt-action="SAVE_PARTICIPANT_SCORES"
                 data-participant-id="${escapeHtml(selectedParticipant.id)}"
               >
-                Salvar pontuação
+                Salvar alterações
               </button>
               <button
                 type="button"
@@ -1331,16 +1357,7 @@ async function handleMgmtNext() {
     if (mgmtStep === 0) {
       mgmtData.name = $('#mgmt-name').value.trim();
       mgmtData.handle = $('#mgmt-handle').value.trim();
-      
-      let rawPhotoUrl = $('#mgmt-photoUrl')?.value.trim() || '';
-      
-      // Convert GDrive links to the thumbnail format that works (same as existing participants)
-      const gDriveMatch = rawPhotoUrl.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*id=)([a-zA-Z0-9_-]+)/);
-      if (gDriveMatch && gDriveMatch[1]) {
-        rawPhotoUrl = `https://drive.google.com/thumbnail?id=${gDriveMatch[1]}&sz=w1000`;
-      }
-      
-      mgmtData.photoUrl = rawPhotoUrl;
+      mgmtData.photoUrl = normalizePhotoUrlInput($('#mgmt-photoUrl')?.value || '');
 
       if (!mgmtData.name || !mgmtData.handle) return alert('Preencha os campos obrigatórios');
       mgmtStep++;

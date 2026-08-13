@@ -537,6 +537,20 @@ export function updateParticipantScores(id, categories) {
   return participantState;
 }
 
+export function updateParticipantProfile(id, { photoUrl } = {}) {
+  participantState = withTotals(participantState.map((participant) => {
+    if (participant.id !== id) return participant;
+
+    return {
+      ...participant,
+      photoUrl: normalizeObjectiveValue(photoUrl) || null,
+    };
+  }));
+
+  writeStoredState(participantState);
+  return participantState;
+}
+
 export function reportParticipantObjective({ reporterId, participantId, categoryKey }) {
   if (!reporterId || !participantId || !OBJECTIVE_CATEGORY_KEYS.includes(categoryKey)) {
     return { ok: false, reason: 'INVALID_INPUT' };
