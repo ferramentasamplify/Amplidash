@@ -519,6 +519,7 @@ function bindVotingEvents() {
   $('#management-content')?.addEventListener('change', handleManagementContentChange);
   $('#management-content')?.addEventListener('input', handleManagementContentInput);
   $('#management-close-btn')?.addEventListener('click', () => {
+    adminPanelUnlocked = false;
     $('#management-modal').style.display = 'none';
   });
   $('#management-btn-back')?.addEventListener('click', handleMgmtBack);
@@ -536,10 +537,21 @@ function bindVotingEvents() {
 }
 
 // Management Flow State
-let mgmtFlow = null; // 'HOME' | 'ADD_PARTICIPANT' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
+let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
 let mgmtStep = 0;
 let mgmtData = {};
 const MGMT_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
+const ADMIN_USERNAME = 'adm';
+const ADMIN_PASSWORD = 'adm';
+let adminPanelUnlocked = false;
+
+function isAdminAuthenticated() {
+  return adminPanelUnlocked;
+}
+
+function setAdminAuthenticated() {
+  adminPanelUnlocked = true;
+}
 
 function buildParticipantOptionsMarkup(selectedId = '') {
   const options = [...getParticipantsData()]
@@ -565,6 +577,11 @@ function setManagementModalVariant(variant = 'default') {
 }
 
 function openManagementHome() {
+  if (!isAdminAuthenticated()) {
+    openManagementLogin();
+    return;
+  }
+
   mgmtFlow = 'HOME';
   mgmtStep = 0;
   mgmtData = {};
@@ -575,6 +592,34 @@ function openManagementHome() {
   renderManagementStep();
 }
 
+function openManagementLogin() {
+  mgmtFlow = 'LOGIN';
+  mgmtStep = 0;
+  mgmtData = {};
+
+  $('#management-modal').style.display = 'flex';
+  $('#management-title').textContent = 'Painel ADM';
+  $('#management-icon').textContent = '🔒';
+  renderManagementStep();
+}
+
+function handleAdminLogin() {
+  const username = $('#mgmt-admin-login')?.value.trim() || '';
+  const password = $('#mgmt-admin-password')?.value || '';
+  const errorBox = $('#mgmt-admin-error');
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    setAdminAuthenticated();
+    openManagementHome();
+    return;
+  }
+
+  if (errorBox) {
+    errorBox.hidden = false;
+    errorBox.textContent = 'Login ou senha inválidos. Use as credenciais de ADM.';
+  }
+}
+
 function handleManagementContentClick(event) {
   const actionTrigger = event.target.closest('[data-mgmt-action]');
   if (!actionTrigger) return;
@@ -582,7 +627,9 @@ function handleManagementContentClick(event) {
   const { mgmtAction } = actionTrigger.dataset;
   const participantId = actionTrigger.dataset.participantId;
 
-  if (mgmtAction === 'ADD_PARTICIPANT') {
+  if (mgmtAction === 'ADMIN_LOGIN') {
+    handleAdminLogin();
+  } else if (mgmtAction === 'ADD_PARTICIPANT') {
     startAddParticipantFlow();
   } else if (mgmtAction === 'MANAGE_PARTICIPANTS') {
     startManageParticipantsFlow();
@@ -751,8 +798,14 @@ async function handleSaveParticipantScores(participantId) {
     categories.bestWeek = parseScoreNumber(totalOverrideRaw) - baseWithoutBestWeek;
   }
 
+  const objectives = MGMT_CATEGORIES.reduce((acc, category) => {
+    acc[category.key] = $(`#mgmt-objective-${participantId}-${category.key}`)?.value.trim() || '';
+    return acc;
+  }, {});
+
   updateParticipantProfile(participantId, { photoUrl });
   updateParticipantScores(participantId, categories);
+  updateParticipantObjectives(participantId, objectives);
   createSnapshot(`Participante atualizado: ${participant.name}`);
   renderDashboard();
   renderManagementStep();
@@ -822,9 +875,62 @@ function renderManagementStep() {
       : 'default';
 
   setManagementModalVariant(variant);
-  btnBack.style.display = mgmtFlow === 'HOME' ? 'none' : 'flex';
+  btnBack.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'LOGIN' ? 'none' : 'flex';
   btnNext.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'MANAGE_PARTICIPANTS' ? 'none' : 'flex';
   btnNext.textContent = 'Próximo';
+
+  if (mgmtFlow === 'LOGIN') {
+    btnNext.style.display = 'none';
+    content.innerHTML = `
+      <form class="mgmt-admin-login" id="mgmt-admin-login-form">
+        <section class="mgmt-admin-login-intro">
+          <span class="mgmt-weekly-eyebrow">Acesso restrito</span>
+          <h4 class="mgmt-weekly-title">Entrar no painel de ADM</h4>
+          <p class="mgmt-weekly-copy">
+            Apenas quem tiver o login e a senha de ADM pode abrir o gerenciamento e alterar as metas dos participantes.
+          </p>
+        </section>
+
+        <div class="mgmt-form-group">
+          <label for="mgmt-admin-login">Login</label>
+          <input
+            type="text"
+            id="mgmt-admin-login"
+            class="mgmt-input"
+            autocomplete="username"
+            placeholder="Digite o login"
+          >
+        </div>
+
+        <div class="mgmt-form-group">
+          <label for="mgmt-admin-password">Senha</label>
+          <input
+            type="password"
+            id="mgmt-admin-password"
+            class="mgmt-input"
+            autocomplete="current-password"
+            placeholder="Digite a senha"
+          >
+        </div>
+
+        <p class="mgmt-admin-error" id="mgmt-admin-error" hidden></p>
+
+        <button type="button" class="btn btn-primary mgmt-admin-submit" data-mgmt-action="ADMIN_LOGIN">
+          Entrar no painel
+        </button>
+      </form>
+    `;
+
+    $('#mgmt-admin-password')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') handleAdminLogin();
+    });
+    $('#mgmt-admin-login-form')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      handleAdminLogin();
+    });
+    $('#mgmt-admin-login')?.focus();
+    return;
+  }
 
   if (mgmtFlow === 'HOME') {
     content.innerHTML = `
@@ -878,10 +984,11 @@ function renderManagementStep() {
           <button type="button" class="management-action-card" data-mgmt-action="MANAGE_PARTICIPANTS">
             <div class="management-action-header">
               <span class="management-action-icon">👥</span>
+              <span class="management-card-chip management-card-chip--neutral">ADM</span>
             </div>
             <span class="management-action-text">
-              <strong class="management-action-title">Gerenciar participantes</strong>
-              <span class="management-action-description">Selecione um participante para ajustar pontos por categoria, total final ou excluir o perfil.</span>
+              <strong class="management-action-title">Painel ADM</strong>
+              <span class="management-action-description">Selecione qualquer participante para alterar metas, ajustar pontos ou excluir o perfil.</span>
             </span>
             <span class="management-card-cta">Abrir editor</span>
           </button>
@@ -1047,9 +1154,9 @@ function renderManagementStep() {
       <div class="mgmt-participants-shell">
         <section class="mgmt-participants-intro">
           <span class="mgmt-weekly-eyebrow">Editor de pontuação</span>
-          <h4 class="mgmt-weekly-title">Gerenciar participantes</h4>
+          <h4 class="mgmt-weekly-title">Painel ADM</h4>
           <p class="mgmt-weekly-copy">
-            Escolha primeiro quem você quer editar. Depois, ajuste foto, pontuações por categoria, confira o total final e exclua o participante se precisar.
+            Escolha qualquer participante. Depois, altere metas, ajuste foto, pontuações por categoria, confira o total final e exclua o perfil se precisar.
           </p>
         </section>
 
@@ -1100,6 +1207,29 @@ function renderManagementStep() {
                 </label>
               ` : ''}
             </label>
+
+            <section class="mgmt-objectives-panel">
+              <div class="mgmt-objectives-head">
+                <span class="mgmt-score-label">Metas da semana</span>
+                <span class="mgmt-score-hint">Essas alterações valem para o participante selecionado.</span>
+              </div>
+              <div class="mgmt-objectives-grid">
+                ${MGMT_CATEGORIES.map((category) => {
+                  const objectiveState = getObjectiveDisplayState(selectedParticipant, category.key);
+                  return `
+                    <label class="mgmt-objective-field">
+                      <span class="mgmt-score-label">${category.icon} ${escapeHtml(category.title)}</span>
+                      <textarea
+                        class="mgmt-input mgmt-area mgmt-area-compact"
+                        id="mgmt-objective-${escapeHtml(selectedParticipant.id)}-${category.key}"
+                        placeholder="Meta de ${escapeHtml(category.title)}"
+                      >${escapeHtml(selectedParticipant.objectives?.[category.key] || '')}</textarea>
+                      ${objectiveState.flagged ? '<span class="mgmt-score-hint mgmt-objective-warning">Ao salvar uma nova meta, as denúncias dessa categoria serão limpas.</span>' : ''}
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </section>
 
             <div class="mgmt-score-grid">
               ${SCORE_EDIT_CATEGORIES.map((category) => `

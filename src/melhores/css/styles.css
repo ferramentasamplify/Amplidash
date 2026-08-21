@@ -986,6 +986,61 @@ body::before {
   color: rgba(255, 255, 255, 0.58);
   line-height: 1.6;
 }
+.mgmt-admin-login {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mgmt-admin-login-intro {
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+}
+.mgmt-admin-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.18);
+  color: #ffb4b4;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.mgmt-admin-submit {
+  width: 100%;
+  justify-content: center;
+}
+.mgmt-objectives-panel {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.mgmt-objectives-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mgmt-objectives-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.mgmt-objective-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mgmt-objective-warning {
+  color: #ffcf8a;
+}
 .mgmt-score-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1308,6 +1363,14 @@ body::before {
 
   .mgmt-score-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mgmt-objectives-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mgmt-objectives-head {
+    flex-direction: column;
   }
 
   .mgmt-score-field--total {
