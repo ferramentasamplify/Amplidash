@@ -537,7 +537,7 @@ function bindVotingEvents() {
 }
 
 // Management Flow State
-let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
+let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'USER_PROFILES' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
 let mgmtStep = 0;
 let mgmtData = {};
 const MGMT_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
@@ -577,11 +577,7 @@ function setManagementModalVariant(variant = 'default') {
 }
 
 function openManagementHome() {
-  if (!isAdminAuthenticated()) {
-    openManagementLogin();
-    return;
-  }
-
+  adminPanelUnlocked = false;
   mgmtFlow = 'HOME';
   mgmtStep = 0;
   mgmtData = {};
@@ -610,7 +606,7 @@ function handleAdminLogin() {
 
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     setAdminAuthenticated();
-    openManagementHome();
+    startManageParticipantsFlow();
     return;
   }
 
@@ -631,6 +627,10 @@ function handleManagementContentClick(event) {
     handleAdminLogin();
   } else if (mgmtAction === 'ADD_PARTICIPANT') {
     startAddParticipantFlow();
+  } else if (mgmtAction === 'USER_PROFILES') {
+    startUserProfilesFlow();
+  } else if (mgmtAction === 'ADMIN_PANEL') {
+    openManagementLogin();
   } else if (mgmtAction === 'MANAGE_PARTICIPANTS') {
     startManageParticipantsFlow();
   } else if (mgmtAction === 'ADD_WEEKLY_FACT') {
@@ -646,11 +646,16 @@ function handleManagementContentClick(event) {
     handleRemoveParticipant(participantId);
   } else if (mgmtAction === 'SAVE_PARTICIPANT_SCORES' && participantId) {
     handleSaveParticipantScores(participantId);
+  } else if (mgmtAction === 'SAVE_PARTICIPANT_PROFILE' && participantId) {
+    handleSaveParticipantProfile(participantId);
   }
 }
 
 function handleManagementContentChange(event) {
-  if (mgmtFlow === 'MANAGE_PARTICIPANTS' && event.target.id === 'mgmt-participant-select') {
+  if (
+    (mgmtFlow === 'MANAGE_PARTICIPANTS' || mgmtFlow === 'USER_PROFILES')
+    && event.target.id === 'mgmt-participant-select'
+  ) {
     mgmtData.selectedParticipantId = event.target.value || '';
     renderManagementStep();
     return;
@@ -695,13 +700,29 @@ function startAddParticipantFlow() {
 }
 
 function startManageParticipantsFlow() {
+  if (!isAdminAuthenticated()) {
+    openManagementLogin();
+    return;
+  }
+
   mgmtFlow = 'MANAGE_PARTICIPANTS';
   mgmtStep = 0;
   mgmtData = { selectedParticipantId: '' };
 
   $('#management-modal').style.display = 'flex';
-  $('#management-title').textContent = 'Gerenciar Participantes';
-  $('#management-icon').textContent = '👥';
+  $('#management-title').textContent = 'Painel ADM';
+  $('#management-icon').textContent = '🔐';
+  renderManagementStep();
+}
+
+function startUserProfilesFlow() {
+  mgmtFlow = 'USER_PROFILES';
+  mgmtStep = 0;
+  mgmtData = { selectedParticipantId: '' };
+
+  $('#management-modal').style.display = 'flex';
+  $('#management-title').textContent = 'Gerenciar usuário';
+  $('#management-icon').textContent = '👤';
   renderManagementStep();
 }
 
@@ -812,6 +833,32 @@ async function handleSaveParticipantScores(participantId) {
   window.alert(`Dados de ${participant.name} atualizados com sucesso.`);
 }
 
+async function handleSaveParticipantProfile(participantId) {
+  const participant = getParticipantById(participantId);
+  if (!participant) {
+    window.alert('Participante não encontrado para salvar a foto.');
+    return;
+  }
+
+  let photoUrl = getParticipantPhotoUrl(participant);
+  try {
+    photoUrl = await getPhotoValueFromUpload({
+      input: $(`#mgmt-photo-${participantId}`),
+      currentPhotoUrl: photoUrl,
+      removeCheckbox: $(`#mgmt-remove-photo-${participantId}`),
+    });
+  } catch (error) {
+    window.alert(error.message || 'Não foi possível processar a imagem selecionada.');
+    return;
+  }
+
+  updateParticipantProfile(participantId, { photoUrl });
+  createSnapshot(`Foto atualizada: ${participant.name}`);
+  renderDashboard();
+  renderManagementStep();
+  window.alert(`Foto de ${participant.name} atualizada com sucesso.`);
+}
+
 function startAddWeeklyFactFlow() {
   mgmtFlow = 'ADD_WEEKLY_FACT';
   mgmtStep = 0;
@@ -876,7 +923,7 @@ function renderManagementStep() {
 
   setManagementModalVariant(variant);
   btnBack.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'LOGIN' ? 'none' : 'flex';
-  btnNext.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'MANAGE_PARTICIPANTS' ? 'none' : 'flex';
+  btnNext.style.display = mgmtFlow === 'HOME' || mgmtFlow === 'MANAGE_PARTICIPANTS' || mgmtFlow === 'USER_PROFILES' ? 'none' : 'flex';
   btnNext.textContent = 'Próximo';
 
   if (mgmtFlow === 'LOGIN') {
@@ -981,16 +1028,27 @@ function renderManagementStep() {
             <span class="management-card-cta">Abrir VAR</span>
           </button>
 
-          <button type="button" class="management-action-card" data-mgmt-action="MANAGE_PARTICIPANTS">
+          <button type="button" class="management-action-card" data-mgmt-action="USER_PROFILES">
             <div class="management-action-header">
               <span class="management-action-icon">👥</span>
+            </div>
+            <span class="management-action-text">
+              <strong class="management-action-title">Gerenciar usuário</strong>
+              <span class="management-action-description">Acesse livremente para selecionar um participante e alterar apenas a foto de perfil.</span>
+            </span>
+            <span class="management-card-cta">Alterar foto</span>
+          </button>
+
+          <button type="button" class="management-action-card" data-mgmt-action="ADMIN_PANEL">
+            <div class="management-action-header">
+              <span class="management-action-icon">🔐</span>
               <span class="management-card-chip management-card-chip--neutral">ADM</span>
             </div>
             <span class="management-action-text">
               <strong class="management-action-title">Painel ADM</strong>
-              <span class="management-action-description">Selecione qualquer participante para alterar metas, ajustar pontos ou excluir o perfil.</span>
+              <span class="management-action-description">Área restrita para alterar metas, controlar pontos, ajustar totais e excluir participantes.</span>
             </span>
-            <span class="management-card-cta">Abrir editor</span>
+            <span class="management-card-cta">Entrar</span>
           </button>
 
           <button type="button" class="management-action-card" data-mgmt-action="ADD_WEEKLY_FACT">
@@ -1134,7 +1192,8 @@ function renderManagementStep() {
     return;
   }
 
-  if (mgmtFlow === 'MANAGE_PARTICIPANTS') {
+  if (mgmtFlow === 'MANAGE_PARTICIPANTS' || mgmtFlow === 'USER_PROFILES') {
+    const isAdminEditor = mgmtFlow === 'MANAGE_PARTICIPANTS';
     const participants = getParticipantsData().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     
     if (participants.length === 0) {
@@ -1153,10 +1212,12 @@ function renderManagementStep() {
     content.innerHTML = `
       <div class="mgmt-participants-shell">
         <section class="mgmt-participants-intro">
-          <span class="mgmt-weekly-eyebrow">Editor de pontuação</span>
-          <h4 class="mgmt-weekly-title">Painel ADM</h4>
+          <span class="mgmt-weekly-eyebrow">${isAdminEditor ? 'Área restrita' : 'Acesso livre'}</span>
+          <h4 class="mgmt-weekly-title">${isAdminEditor ? 'Painel ADM' : 'Gerenciar usuário'}</h4>
           <p class="mgmt-weekly-copy">
-            Escolha qualquer participante. Depois, altere metas, ajuste foto, pontuações por categoria, confira o total final e exclua o perfil se precisar.
+            ${isAdminEditor
+              ? 'Escolha qualquer participante. Depois, altere metas, ajuste foto, pontuações por categoria, confira o total final e exclua o perfil se precisar.'
+              : 'Escolha seu nome na lista e atualize somente a foto de perfil. Metas e pontos ficam bloqueados no Painel ADM.'}
           </p>
         </section>
 
@@ -1171,7 +1232,9 @@ function renderManagementStep() {
             `).join('')}
           </select>
           <p class="mgmt-participants-picker-copy">
-            Ao selecionar alguém, o editor aparece logo abaixo com foto, categorias e total final.
+            ${isAdminEditor
+              ? 'Ao selecionar alguém, o editor administrativo aparece logo abaixo com metas, categorias e total final.'
+              : 'Ao selecionar alguém, aparece a opção para trocar ou remover a foto de perfil.'}
           </p>
         </section>
 
@@ -1208,6 +1271,7 @@ function renderManagementStep() {
               ` : ''}
             </label>
 
+            ${isAdminEditor ? `
             <section class="mgmt-objectives-panel">
               <div class="mgmt-objectives-head">
                 <span class="mgmt-score-label">Metas da semana</span>
@@ -1269,16 +1333,18 @@ function renderManagementStep() {
                 <span class="mgmt-score-hint" id="mgmt-bestweek-hint-${escapeHtml(selectedParticipant.id)}">Best of The Week atual: ${parseScoreNumber(selectedParticipant.categories?.bestWeek)} pts</span>
               </label>
             </div>
+            ` : ''}
 
             <div class="mgmt-participant-actions">
               <button
                 type="button"
                 class="btn btn-primary"
-                data-mgmt-action="SAVE_PARTICIPANT_SCORES"
+                data-mgmt-action="${isAdminEditor ? 'SAVE_PARTICIPANT_SCORES' : 'SAVE_PARTICIPANT_PROFILE'}"
                 data-participant-id="${escapeHtml(selectedParticipant.id)}"
               >
-                Salvar alterações
+                ${isAdminEditor ? 'Salvar alterações' : 'Salvar foto'}
               </button>
+              ${isAdminEditor ? `
               <button
                 type="button"
                 class="btn btn-danger-ghost"
@@ -1287,11 +1353,14 @@ function renderManagementStep() {
               >
                 Excluir participante
               </button>
+              ` : ''}
             </div>
           </article>
         ` : `
           <div class="mgmt-participant-empty">
-            Selecione um participante acima para abrir o editor de pontuação e gerenciamento.
+            ${isAdminEditor
+              ? 'Selecione um participante acima para abrir o editor administrativo.'
+              : 'Selecione um participante acima para alterar a foto de perfil.'}
           </div>
         `}
       </div>
@@ -1441,7 +1510,12 @@ function handleMgmtBack() {
     }
     mgmtStep--;
     renderManagementStep();
-  } else if (mgmtFlow === 'MANAGE_PARTICIPANTS' || mgmtFlow === 'ADD_WEEKLY_FACT' || mgmtFlow === 'CALL_VAR') {
+  } else if (
+    mgmtFlow === 'MANAGE_PARTICIPANTS'
+    || mgmtFlow === 'USER_PROFILES'
+    || mgmtFlow === 'ADD_WEEKLY_FACT'
+    || mgmtFlow === 'CALL_VAR'
+  ) {
     openManagementHome();
   }
 }
