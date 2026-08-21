@@ -13,7 +13,6 @@ import {
   getWeeklyFactHistory,
   loadParticipantsData,
   persistVotingSession,
-  reportParticipantObjective,
   recordWeeklyFactHistory,
   removeParticipant,
   restoreSnapshot,
@@ -537,7 +536,7 @@ function bindVotingEvents() {
 }
 
 // Management Flow State
-let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'USER_PROFILES' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'CALL_VAR' | 'NEW_CYCLE'
+let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'USER_PROFILES' | 'MANAGE_PARTICIPANTS' | 'ADD_WEEKLY_FACT' | 'NEW_CYCLE'
 let mgmtStep = 0;
 let mgmtData = {};
 const MGMT_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
@@ -635,8 +634,6 @@ function handleManagementContentClick(event) {
     startManageParticipantsFlow();
   } else if (mgmtAction === 'ADD_WEEKLY_FACT') {
     startAddWeeklyFactFlow();
-  } else if (mgmtAction === 'CALL_VAR') {
-    startCallVarFlow();
   } else if (mgmtAction === 'NEW_CYCLE') {
     startNewCycleFlow();
   } else if (mgmtAction === 'OPEN_GOALS' && isGoalsWindowActive()) {
@@ -659,23 +656,6 @@ function handleManagementContentChange(event) {
     mgmtData.selectedParticipantId = event.target.value || '';
     renderManagementStep();
     return;
-  }
-
-  if (mgmtFlow !== 'CALL_VAR') return;
-
-  if (event.target.id === 'mgmt-var-reporter') {
-    mgmtData.reporterId = event.target.value || '';
-    renderManagementStep();
-  }
-
-  if (event.target.id === 'mgmt-var-participant') {
-    mgmtData.participantId = event.target.value || '';
-    renderManagementStep();
-  }
-
-  if (event.target.id === 'mgmt-var-category') {
-    mgmtData.categoryKey = event.target.value || '';
-    renderManagementStep();
   }
 }
 
@@ -876,21 +856,6 @@ function startAddWeeklyFactFlow() {
   renderManagementStep();
 }
 
-function startCallVarFlow() {
-  mgmtFlow = 'CALL_VAR';
-  mgmtStep = 0;
-  mgmtData = {
-    reporterId: '',
-    participantId: '',
-    categoryKey: MGMT_CATEGORIES[0]?.key || '',
-  };
-
-  $('#management-modal').style.display = 'flex';
-  $('#management-title').textContent = 'Chamar o VAR';
-  $('#management-icon').textContent = '🚨';
-  renderManagementStep();
-}
-
 async function startNewCycleFlow() {
   const confirmed = window.confirm('Isso vai zerar as pontuações atuais e permitir redefinir os objetivos de todos. Continuar?');
   if (!confirmed) return;
@@ -915,8 +880,6 @@ function renderManagementStep() {
 
   const variant = mgmtFlow === 'HOME'
     ? 'hub'
-    : mgmtFlow === 'CALL_VAR'
-      ? 'hub'
     : mgmtFlow === 'ADD_WEEKLY_FACT'
       ? 'weekly-fact'
       : 'default';
@@ -1065,118 +1028,6 @@ function renderManagementStep() {
     `;
 
     syncGoalsButtonState();
-    return;
-  }
-
-  if (mgmtFlow === 'CALL_VAR') {
-    const participants = [...getParticipantsData()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    const selectedParticipant = getParticipantById(mgmtData.participantId);
-    const selectedCategory = MGMT_CATEGORIES.find((category) => category.key === mgmtData.categoryKey) || MGMT_CATEGORIES[0];
-    const objectiveState = selectedParticipant && selectedCategory
-      ? getObjectiveDisplayState(selectedParticipant, selectedCategory.key)
-      : null;
-    const reviewState = selectedParticipant && selectedCategory
-      ? getObjectiveModerationState(selectedParticipant, selectedCategory.key)
-      : { reporterIds: [], flagged: false };
-    const reporterNames = reviewState.reporterIds
-      .map((reporterId) => getParticipantById(reporterId)?.name || reporterId)
-      .filter(Boolean);
-    const categoryOptions = MGMT_CATEGORIES
-      .map((category) => `
-        <option value="${escapeHtml(category.key)}" ${category.key === selectedCategory?.key ? 'selected' : ''}>
-          ${escapeHtml(category.title)}
-        </option>
-      `)
-      .join('');
-
-    btnNext.textContent = 'Registrar denúncia';
-
-    content.innerHTML = `
-      <div class="mgmt-var-shell">
-        <section class="mgmt-var-intro">
-          <span class="mgmt-weekly-eyebrow">Validação de metas</span>
-          <h4 class="mgmt-weekly-title">Chamar o VAR</h4>
-          <p class="mgmt-weekly-copy">
-            Registre uma denúncia quando uma meta estiver fora do combinado. Com ${VAR_REPORT_THRESHOLD} denúncias únicas, a meta some do jogo e fica marcada como "${OBJECTIVE_VAR_PLACEHOLDER}" até ser alterada.
-          </p>
-        </section>
-
-        <div class="mgmt-var-grid">
-          <section class="mgmt-var-panel">
-            <div class="mgmt-form-group">
-              <label for="mgmt-var-reporter">Quem está denunciando?</label>
-              <select id="mgmt-var-reporter" class="mgmt-input">
-                <option value="">Selecione um participante</option>
-                ${participants.map((participant) => `
-                  <option value="${escapeHtml(participant.id)}" ${participant.id === mgmtData.reporterId ? 'selected' : ''}>
-                    ${escapeHtml(participant.name)}
-                  </option>
-                `).join('')}
-              </select>
-            </div>
-
-            <div class="mgmt-form-group">
-              <label for="mgmt-var-participant">Meta de quem vai para revisão?</label>
-              <select id="mgmt-var-participant" class="mgmt-input">
-                <option value="">Selecione um participante</option>
-                ${participants.map((participant) => `
-                  <option value="${escapeHtml(participant.id)}" ${participant.id === mgmtData.participantId ? 'selected' : ''}>
-                    ${escapeHtml(participant.name)}
-                  </option>
-                `).join('')}
-              </select>
-            </div>
-
-            <div class="mgmt-form-group mgmt-form-group-last">
-              <label for="mgmt-var-category">Categoria da meta</label>
-              <select id="mgmt-var-category" class="mgmt-input">
-                ${categoryOptions}
-              </select>
-            </div>
-          </section>
-
-          <section class="mgmt-var-panel mgmt-var-panel--preview">
-            <div class="mgmt-var-preview-head">
-              <div>
-                <span class="weekly-history-badge badge-worst">Radar do VAR</span>
-                <h5 class="mgmt-weekly-card-title">Status da meta</h5>
-              </div>
-              <span class="management-card-chip ${reviewState.flagged ? 'management-card-chip--alert' : 'management-card-chip--neutral'}">
-                ${reviewState.reporterIds.length}/${VAR_REPORT_THRESHOLD} denúncias
-              </span>
-            </div>
-
-            ${selectedParticipant && selectedCategory ? `
-              <div class="mgmt-var-summary">
-                ${buildAvatarMarkup(selectedParticipant, 'item-avatar')}
-                <div>
-                  <div class="weekly-history-summary-name">${escapeHtml(selectedParticipant.name)}</div>
-                  <div class="weekly-history-summary-handle">${escapeHtml(selectedCategory.title)}</div>
-                </div>
-              </div>
-              <div class="mgmt-var-goal ${objectiveState?.flagged ? 'is-flagged' : ''}">
-                ${objectiveState?.hasGoal ? escapeHtml(objectiveState.text) : 'Nenhuma meta cadastrada nessa categoria.'}
-              </div>
-            ` : `
-              <div class="mgmt-var-empty">Selecione um participante e uma categoria para revisar a meta atual.</div>
-            `}
-
-            <div class="mgmt-var-reporters">
-              <span class="mgmt-var-reporters-label">Denúncias registradas</span>
-              ${reporterNames.length
-                ? `<div class="mgmt-var-reporters-list">${reporterNames.map((name) => `<span class="mgmt-var-reporter-chip">${escapeHtml(name)}</span>`).join('')}</div>`
-                : '<p class="mgmt-var-reporters-empty">Ainda não há denúncias nessa meta.</p>'}
-            </div>
-
-            ${reviewState.flagged ? `
-              <p class="mgmt-var-warning">O VAR passou aqui. A meta ficará oculta no jogo e no perfil até o participante alterar esse texto.</p>
-            ` : `
-              <p class="mgmt-var-warning">Quando a terceira denúncia única entrar, a meta será ocultada automaticamente.</p>
-            `}
-          </section>
-        </div>
-      </div>
-    `;
     return;
   }
 
@@ -1502,64 +1353,12 @@ function handleMgmtBack() {
     mgmtFlow === 'MANAGE_PARTICIPANTS'
     || mgmtFlow === 'USER_PROFILES'
     || mgmtFlow === 'ADD_WEEKLY_FACT'
-    || mgmtFlow === 'CALL_VAR'
   ) {
     openManagementHome();
   }
 }
 
 async function handleMgmtNext() {
-  if (mgmtFlow === 'CALL_VAR') {
-    mgmtData.reporterId = $('#mgmt-var-reporter')?.value || '';
-    mgmtData.participantId = $('#mgmt-var-participant')?.value || '';
-    mgmtData.categoryKey = $('#mgmt-var-category')?.value || '';
-
-    if (!mgmtData.reporterId || !mgmtData.participantId || !mgmtData.categoryKey) {
-      window.alert('Selecione quem denuncia, qual participante será revisado e a categoria da meta.');
-      return;
-    }
-
-    const reportResult = reportParticipantObjective({
-      reporterId: mgmtData.reporterId,
-      participantId: mgmtData.participantId,
-      categoryKey: mgmtData.categoryKey,
-    });
-
-    if (!reportResult.ok) {
-      const messages = {
-        INVALID_INPUT: 'Não foi possível registrar a denúncia. Revise os campos e tente novamente.',
-        SELF_REPORT: 'A pessoa não pode denunciar a própria meta.',
-        NO_OBJECTIVE: 'Essa categoria está sem meta cadastrada no momento.',
-        DUPLICATE_REPORT: 'Essa pessoa já denunciou essa meta.',
-        ALREADY_FLAGGED: 'Essa meta já foi invalidada pelo VAR e está oculta até ser alterada.',
-        PARTICIPANT_NOT_FOUND: 'Participante não encontrado para registrar a denúncia.',
-      };
-
-      window.alert(messages[reportResult.reason] || 'Não foi possível registrar a denúncia.');
-      return;
-    }
-
-    const targetParticipant = getParticipantById(mgmtData.participantId);
-    const category = MGMT_CATEGORIES.find((item) => item.key === mgmtData.categoryKey);
-
-    createSnapshot(
-      reportResult.flagged
-        ? `VAR acionado: ${targetParticipant?.name || 'participante'} (${category?.title || mgmtData.categoryKey})`
-        : `Denúncia registrada: ${targetParticipant?.name || 'participante'} (${category?.title || mgmtData.categoryKey})`,
-    );
-
-    renderDashboard();
-    mgmtData.reporterId = '';
-    renderManagementStep();
-
-    window.alert(
-      reportResult.flagged
-        ? `Terceira denúncia registrada. A meta de ${targetParticipant?.name || 'participante'} agora aparece como "${OBJECTIVE_VAR_PLACEHOLDER}" até ser alterada.`
-        : `Denúncia registrada com sucesso. Essa meta está com ${reportResult.count}/${VAR_REPORT_THRESHOLD} denúncias.`,
-    );
-    return;
-  }
-
   if (mgmtFlow === 'ADD_WEEKLY_FACT') {
     mgmtData.date = $('#mgmt-weekly-date')?.value || '';
     mgmtData.bestParticipantId = $('#mgmt-best-participant')?.value || '';
