@@ -1016,18 +1016,6 @@ function renderManagementStep() {
             <div class="management-goals-countdown" id="mgmt-goals-countdown" hidden></div>
           </button>
 
-          <button type="button" class="management-action-card management-action-card--var" data-mgmt-action="CALL_VAR">
-            <div class="management-action-header">
-              <span class="management-action-icon">🚨</span>
-              <span class="management-card-chip management-card-chip--alert">3 denúncias</span>
-            </div>
-            <span class="management-action-text">
-              <strong class="management-action-title">Chamar o VAR</strong>
-              <span class="management-action-description">Se três pessoas denunciarem a mesma meta, ela some e vira "O VAR passou aqui" até ser alterada.</span>
-            </span>
-            <span class="management-card-cta">Abrir VAR</span>
-          </button>
-
           <button type="button" class="management-action-card" data-mgmt-action="USER_PROFILES">
             <div class="management-action-header">
               <span class="management-action-icon">👥</span>
