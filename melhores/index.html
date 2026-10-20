@@ -46,7 +46,7 @@
       <!-- Top Text/Instructions -->
       <div class="page-intro">
         <h2>Acompanhe o desenvolvimento</h2>
-        <p>Ranking segmentado por categorias de foco da semana.</p>
+        <p>Acompanhe as metas e os acontecimentos da semana.</p>
         <div class="page-intro-actions">
           <button id="start-voting-btn" class="btn btn-primary btn-cta">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -63,79 +63,6 @@
           </button>
         </div>
       </div>
-
-      <!-- Categories Grid -->
-      <section class="section categories-section">
-        <div class="categories-grid" id="categories-grid">
-          
-          <!-- Exercício Físico -->
-          <div class="category-card" id="cat-exercicio">
-            <div class="category-header">
-              <span class="category-icon">💪</span>
-              <h3 class="category-title">Exercício Físico</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-          <!-- Família -->
-          <div class="category-card" id="cat-familia">
-            <div class="category-header">
-              <span class="category-icon">👨‍👩‍👧‍👦</span>
-              <h3 class="category-title">Família</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-          <!-- Alimentação -->
-          <div class="category-card" id="cat-alimentacao">
-            <div class="category-header">
-              <span class="category-icon">🥗</span>
-              <h3 class="category-title">Alimentação</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-          <!-- Hobbies -->
-          <div class="category-card" id="cat-hobbies">
-            <div class="category-header">
-              <span class="category-icon">🎨</span>
-              <h3 class="category-title">Hobbies</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-          <!-- Conhecimentos -->
-          <div class="category-card" id="cat-conhecimentos">
-            <div class="category-header">
-              <span class="category-icon">📚</span>
-              <h3 class="category-title">Conhecimentos</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-          <!-- Best of the week -->
-          <div class="category-card highlight-card" id="cat-bestWeek">
-            <div class="category-header">
-              <span class="category-icon">🌟</span>
-              <h3 class="category-title">Best of The Week</h3>
-            </div>
-            <div class="category-podium">
-              <!-- Instantiated via JS -->
-            </div>
-          </div>
-
-        </div>
-      </section>
 
       <section class="section history-section">
         <div class="table-header">
@@ -465,6 +392,81 @@
         <div id="management-content">
           <!-- Dynamic content: Form or Wizard -->
         </div>
+      <!-- Categories Grid -->
+      <section class="section categories-section" id="admin-category-rankings" style="display: none;">
+        <h4 class="section-title">Ranking por categoria</h4>
+        <div class="categories-grid" id="categories-grid">
+
+          <!-- Exercício Físico -->
+          <div class="category-card" id="cat-exercicio">
+            <div class="category-header">
+              <span class="category-icon">💪</span>
+              <h3 class="category-title">Exercício Físico</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+          <!-- Família -->
+          <div class="category-card" id="cat-familia">
+            <div class="category-header">
+              <span class="category-icon">👨‍👩‍👧‍👦</span>
+              <h3 class="category-title">Família</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+          <!-- Alimentação -->
+          <div class="category-card" id="cat-alimentacao">
+            <div class="category-header">
+              <span class="category-icon">🥗</span>
+              <h3 class="category-title">Alimentação</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+          <!-- Hobbies -->
+          <div class="category-card" id="cat-hobbies">
+            <div class="category-header">
+              <span class="category-icon">🎨</span>
+              <h3 class="category-title">Hobbies</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+          <!-- Conhecimentos -->
+          <div class="category-card" id="cat-conhecimentos">
+            <div class="category-header">
+              <span class="category-icon">📚</span>
+              <h3 class="category-title">Conhecimentos</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+          <!-- Best of the week -->
+          <div class="category-card highlight-card" id="cat-bestWeek">
+            <div class="category-header">
+              <span class="category-icon">🌟</span>
+              <h3 class="category-title">Best of The Week</h3>
+            </div>
+            <div class="category-podium">
+              <!-- Instantiated via JS -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+
       </div>
 
       <div class="modal-actions" id="management-actions">

@@ -874,6 +874,11 @@ async function startNewCycleFlow() {
 }
 
 function renderManagementStep() {
+  const categoryRankings = $('#admin-category-rankings');
+  if (categoryRankings) {
+    categoryRankings.style.display = isAdminAuthenticated() && mgmtFlow === 'MANAGE_PARTICIPANTS' ? '' : 'none';
+  }
+
   const content = $('#management-content');
   const btnNext = $('#management-btn-next');
   const btnBack = $('#management-btn-back');
