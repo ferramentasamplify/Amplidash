@@ -2244,3 +2244,17 @@ body::before {
     font-size: 0.88rem;
   }
 }
+
+/* Full-screen workspace for the authenticated administrator. */
+#management-modal.management-modal--admin { padding: 0; background: #0b1024; }
+#management-modal.management-modal--admin > .modal-card {
+  width: 100%; max-width: none; height: 100dvh; max-height: 100dvh;
+  border: 0; border-radius: 0; padding: clamp(16px, 3vw, 40px);
+  background: #0b1024;
+}
+#management-modal.management-modal--admin .modal-body { flex: 1; min-height: 0; }
+#management-modal.management-modal--admin .modal-header { margin-bottom: 16px; }
+#management-modal.management-modal--admin .modal-category-icon { font-size: 28px; }
+.admin-navigation { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.admin-navigation a { text-decoration: none; }
+#admin-general-ranking, #admin-category-rankings { scroll-margin-top: 16px; }

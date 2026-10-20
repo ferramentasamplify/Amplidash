@@ -515,6 +515,7 @@ function bindVotingEvents() {
 
   // Management Events
   $('#management-content')?.addEventListener('click', handleManagementContentClick);
+  $('#admin-navigation')?.addEventListener('click', handleManagementContentClick);
   $('#management-content')?.addEventListener('change', handleManagementContentChange);
   $('#management-content')?.addEventListener('input', handleManagementContentInput);
   $('#management-close-btn')?.addEventListener('click', () => {
@@ -576,6 +577,10 @@ function setManagementModalVariant(variant = 'default') {
 }
 
 function openManagementHome() {
+  if (isAdminAuthenticated()) {
+    startManageParticipantsFlow();
+    return;
+  }
   adminPanelUnlocked = false;
   mgmtFlow = 'HOME';
   mgmtStep = 0;
@@ -874,10 +879,13 @@ async function startNewCycleFlow() {
 }
 
 function renderManagementStep() {
-  const categoryRankings = $('#admin-category-rankings');
-  if (categoryRankings) {
-    categoryRankings.style.display = isAdminAuthenticated() && mgmtFlow === 'MANAGE_PARTICIPANTS' ? '' : 'none';
+  const adminVisible = isAdminAuthenticated() && mgmtFlow !== 'LOGIN';
+  $('#management-modal')?.classList.toggle('management-modal--admin', adminVisible);
+  for (const id of ['admin-navigation', 'admin-general-ranking', 'admin-category-rankings']) {
+    const element = document.getElementById(id);
+    if (element) element.style.display = adminVisible ? '' : 'none';
   }
+  if (adminVisible) renderDashboard();
 
   const content = $('#management-content');
   const btnNext = $('#management-btn-next');
