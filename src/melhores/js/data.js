@@ -381,7 +381,7 @@ export async function persistVotingSession({ sessionResults, bestWinnerId, worst
     }
 
     if (participant.id === worstWinnerId) {
-      scoreBreakdown.piorFato = (scoreBreakdown.piorFato || 0) - 1;
+      scoreBreakdown.piorFato = (scoreBreakdown.piorFato || 0) + 1;
     }
 
     categories.bestWeek = (scoreBreakdown.melhorFato || 0) + (scoreBreakdown.piorFato || 0);
