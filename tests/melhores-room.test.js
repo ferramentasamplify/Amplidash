@@ -357,3 +357,20 @@ test('session host can join during writing without resetting timer; late partici
  assert.equal((await call(admin,{action:'save',roomId:room.id,best:'Meu melhor',worst:'Meu pior',done:true,revision:Date.now()})).status,200);
  assert.equal((await store.get('active-room')).members.filter(id=>id==='alexandre-neto').length,1);
 });
+
+test('host participates when starting from game UI and can vote in an already-open spectator session',async()=>{
+ const store=new Store(),gameStore=new Store();await store.setJSON('accounts',configs);await gameStore.setJSON('game-state',game);
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body),{store,gameStore});
+ await call(admin,{action:'create'});const initial=await store.get('active-room');
+ await call(ana,{action:'join',roomId:initial.id});await call(bruno,{action:'join',roomId:initial.id});
+ assert.equal((await call(admin,{action:'start',roomId:initial.id,participate:true})).status,200);
+ assert((await store.get('active-room')).members.includes('alexandre-neto'));
+ const room=await store.get('active-room');room.members=['ana','bruno'];room.phase='voting-worst';room.electorate=['ana','bruno'];room.votes={best:{},worst:{}};await store.setJSON('active-room',room);
+ assert.equal((await call(admin,{action:'vote',roomId:room.id,target:'alexandre-neto'})).status,400);
+ assert.equal((await call(admin,{action:'vote',roomId:room.id,target:'ana'})).status,200);
+ assert.equal((await call(admin,{action:'vote',roomId:room.id,target:'bruno'})).status,409);
+ assert.equal((await call(ana,{action:'vote',roomId:room.id,target:'bruno'})).status,200);
+ assert.equal((await call(bruno,{action:'vote',roomId:room.id,target:'ana'})).status,200);
+ assert.equal((await store.get('active-room')).results.worst.winner,'ana');
+});

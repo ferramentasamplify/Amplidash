@@ -50,6 +50,7 @@ export async function roomRequest(request, deps = {}) {
             if (!room.members.includes(user.id)) room.members.push(user.id);
           } else if (action === 'start') {
             if (room.phase !== 'waiting' || !room.members.length) fail('A sala precisa de participantes e deve estar aguardando.', 409);
+            if (body.participate === true && !room.members.includes(user.id)) room.members.push(user.id);
             room.phase = 'writing'; room.deadline = Date.now() + 300e3;
           } else if (action === 'extend') {
             if (room.phase !== 'writing') fail('O cronômetro só vale durante a escrita.', 409);
@@ -74,10 +75,12 @@ export async function roomRequest(request, deps = {}) {
             room.electorate = eligible; room.phase = 'voting-'+kind;
           } else if (action === 'vote') {
             const kind = room.phase === 'voting-best' ? 'best' : room.phase === 'voting-worst' ? 'worst' : null;
-            if (!kind || !room.electorate.includes(user.id)) fail('Você não participa desta votação.',403);
+            const hostVoting = user.role === 'admin' && room.administratorId === user.id;
+            if (!kind || (!room.electorate.includes(user.id) && !hostVoting)) fail('Você não participa desta votação.',403);
             if (body.target === user.id) fail('Ninguém pode votar em si mesmo.',400);
             if (!room.members.includes(body.target)) fail('Participante inválido.');
             if (room.votes[kind][user.id]) fail('Seu voto já foi registrado.',409);
+            if (hostVoting && !room.electorate.includes(user.id)) room.electorate.push(user.id);
             room.votes[kind][user.id] = body.target;
             if (room.electorate.every(id => room.votes[kind][id])) {
               const counts = Object.fromEntries(room.members.map(id=>[id,0]));
