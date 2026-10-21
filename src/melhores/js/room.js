@@ -16,7 +16,8 @@ const avatar=(url,name)=>`<span class="member-portrait">${photo(url)||`<span>${e
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, saving = Promise.resolve(), adminLoaded = false;
 let draftRevision = 0;
-let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='';
+let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
+let previousRoom=null;
 function changeView(view){
  if(view!=='room')meetingSound.stop();
  if(view==='admin'&&user.role!=='admin')return;
@@ -95,10 +96,14 @@ function confirmGymrats(){
 }
 async function poll(){
   if(polling)return;polling=true;
-  try{state=await api('room'); offset=state.serverTime-Date.now();render();}catch(e){error(e.message);}finally{polling=false;}
+  try{state=await api('room');
+    const next=state.room,finished=r=>r&&['completed','closed'].includes(r.phase);
+    if(next?.id===previousRoom?.id&&!finished(previousRoom)&&finished(next)&&currentView==='room'&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id))endingRoom=next.id;
+    previousRoom=next;
+    offset=state.serverTime-Date.now();render();}catch(e){error(e.message);}finally{polling=false;}
 }
 function render(){
-  meetingSound.update(state.room,!!state.room?.members.some(m=>m.id===user.id));
+  meetingSound.update(state.room,!!state.room?.members.some(m=>m.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
   const room=state.room,admin=user.role==='admin'&&(!room?.administrator||room.administrator.id===user.id),host=esc(room?.administrator?.name||'Administrador'),content=document.getElementById('room-content');
   const key=(room?.id||'none')+':'+(room?.phase||'none')+':'+!!room?.members.some(m=>m.id===user.id);
   if(layout!==key){
@@ -147,11 +152,14 @@ function render(){
     const done=Object.keys(marked).length;
     document.getElementById('room-status').innerHTML=`<p class="room-eyebrow">🎯 METAS PESSOAIS · HORA DE CONVERSAR</p><h2>${host} conduz. Você conta. ✨</h2><p>${host} vai chamar cada pessoa, perguntar sobre as cinco metas e marcar os resultados. Há um único administrador por sessão. Quem estiver na vez responde <strong>“sim” ou “não”</strong>; o restante do time acompanha. 👂</p>`;
     stage.innerHTML=`<section class="goals-person"><div class="goals-person-avatar">${photo(person.photoUrl)||`<span>${esc(initials)}</span>`}</div><div><p class="room-eyebrow">🎤 É A VEZ DE · ${room.current+1} DE ${room.members.length}</p><h2>${esc(person.name)}</h2><p>${person.id===user.id?`Sua vez! Responda às perguntas de ${host}. 💬`:'Vamos ouvir '+esc(person.name)+'. Cada meta, uma resposta. 💬'}</p></div><span class="goals-count">${done}/5 avaliadas</span></section><div class="goals-how"><span>🎙️ <strong>${host} pergunta</strong></span><span>💬 <strong>A pessoa responde sim ou não</strong></span><span>✍️ <strong>Só ${host} marca</strong></span></div>${!person.online?'<p class="goals-offline">🌙 Sem sinal recente. Após 60 segundos sem conexão, metas ainda não avaliadas recebem ausência automaticamente: −1 por meta.</p>':''}<div class="live-goals-grid">${Object.entries(goalLabels).map(([key,[emoji,label]])=>`<article class="live-goal live-goal-${key} ${marked[key]?'has-result result-'+marked[key]:''}"><div class="live-goal-header"><span class="live-goal-emoji" aria-hidden="true">${emoji}</span><h3>${label}</h3></div><p class="live-goal-text">${esc(person.objectives?.[key]||'Meta ainda não preenchida. 🌱')}</p><p class="live-goal-result">${({done:'⭐ Cumpriu · +1 ponto',missed:'💩 Não cumpriu · 0 ponto',absent:'🌙 Ausente · −1 ponto'})[marked[key]]||`⏳ Aguardando a pergunta de ${host}`}</p>${admin&&person.online?`<div class="live-goal-actions">${[['done','⭐ Sim, cumpriu'],['missed','💩 Não cumpriu'],...[]].map(([result,text])=>`<button data-room-action="mark" data-target="${esc(person.id)}" data-category="${key}" data-result="${result}" class="goal-answer goal-answer-${result}" aria-pressed="${marked[key]===result}">${text}</button>`).join('')}</div>`:`<p class="live-goal-observer">👀 Acompanhe por aqui. Somente ${host}, administrador desta sessão, marca os resultados ao vivo.</p>`}</article>`).join('')}</div><footer class="goals-footer"><p>${admin?'📝 Marque as cinco metas para avançar.':`🙌 Você não precisa clicar em nada. Responda quando ${host} chamar.`}</p>${admin?choice('next-goal',room.current===room.members.length-1?'✨ Concluir metas':'Próxima pessoa →',{target:person.id}):''}</footer>`;
-  }else if(room&&['completed','closed'].includes(room.phase)){
+  }else if(room&&['completed','closed'].includes(room.phase)&&endingRoom===room.id){
     const complete=room.phase==='completed'||room.completedAt;
     document.getElementById('room-status').innerHTML='';document.getElementById('room-controls').innerHTML='';
     stage.innerHTML=`<section class="meeting-ending" role="dialog" aria-modal="true" aria-labelledby="ending-title"><div class="ending-card"><span class="ending-emoji">🌅 ✨</span><p class="room-eyebrow">NOSSO ENCONTRO CHEGOU AO FIM</p><h1 id="ending-title" tabindex="-1">É isso!<br>Tenha um bom final de semana!</h1><p>${complete?'Metas concluídas, histórias compartilhadas e pontos registrados.':'A sala foi encerrada. Seus relatos foram preservados.'}</p><p>Descanse, aproveite e até o próximo encontro. 💙</p><div class="ending-actions"><button data-profile-view="profile">👤 Ir para meu perfil</button>${admin?'<button data-profile-view="admin">🏆 Administrador e rankings</button>'+button('create','✨ Criar próxima sala'):''}</div></div></section>`;
     if(lastEnding!==room.id){lastEnding=room.id;if(joined)currentView='room';requestAnimationFrame(()=>document.getElementById('ending-title')?.focus());}
+  }else if(room&&['completed','closed'].includes(room.phase)){
+    stage.innerHTML='<p>O encontro já terminou. Até a próxima semana! 💙</p>';
+    document.getElementById('room-controls').innerHTML=admin?button('create','✨ Criar próxima sala'):'';
   }else if(room?.phase==='presenting'){
     const person=room.members[room.current];
     const fact=room.presentationFact==='worst'?'worst':'best';
