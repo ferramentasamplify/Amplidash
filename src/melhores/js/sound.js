@@ -7,8 +7,10 @@ export function createMeetingSound(container) {
   function label(){toggle.textContent=enabled?'🔊 Som ligado':'🔇 Som desligado';toggle.setAttribute('aria-pressed',String(enabled));toggle.title='Ligar ou silenciar efeitos e música';}
   function stop(){for(const node of active){try{node.stop();}catch{}}active=[];}
   function unlock(){if(!enabled)return;try{context ||= new (window.AudioContext||window.webkitAudioContext)();if(context.state==='suspended')context.resume().catch(()=>{});}catch{}}
-  function notes(sequence,type='sine',volume=.055){
-    if(!enabled||document.hidden||!context||context.state!=='running')return;
+  async function notes(sequence,type='sine',volume=.055){
+    if(!enabled||document.hidden||!context)return;
+    if(context.state==='suspended'){try{await context.resume();}catch{return;}}
+    if(!enabled||context.state!=='running')return;
     const start=context.currentTime+.015;
     active=active.filter(node=>!node.finished);
     for(const [hz,offset,duration] of sequence){
@@ -24,12 +26,13 @@ export function createMeetingSound(container) {
   const melody=[523,659,784,659,587,698,880,698,659,784,1047,988,880,784,659,523];
   const ending=melody.map((hz,i)=>[hz,i*.3,.38]);
   for(let i=0;i<4;i++)for(const hz of [131,165,196])ending.push([hz,i*1.2,1.15]);
-  function celebrate(kind){stop();notes(kind==='best'?best:kind==='worst'?worst:ending,'sine',kind==='ending'?.035:.06);}
+  function celebrate(kind){stop();notes(kind==='best'?best:kind==='worst'?worst:ending,'sine',kind==='ending'?.09:.16);}
   toggle.onclick=()=>{enabled=!enabled;try{localStorage.setItem('melhores_sound',enabled?'on':'off');}catch{}label();if(enabled){unlock();notes([[659,0,.12],[880,.1,.18]]);}else stop();};
   document.addEventListener('pointerdown',unlock,{capture:true});
   document.addEventListener('keydown',unlock,{capture:true});
-  document.addEventListener('click',e=>{const button=e.target.closest('button');if(!button||button===toggle||button.disabled||!button.closest('#weekly-room'))return;unlock();notes([[660,0,.055],[880,.04,.075]],'sine',.025);});
+  document.addEventListener('click',e=>{const button=e.target.closest('button');if(!button||button===toggle||button.disabled||!button.closest('#weekly-room'))return;unlock();notes([[660,0,.08],[880,.06,.12]],'triangle',.09);},{capture:true});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+  const test=document.createElement('button');test.type='button';test.className='sound-test';test.textContent='🎵 Testar som';container.append(test);test.onclick=()=>{if(!enabled){enabled=true;try{localStorage.setItem('melhores_sound','on');}catch{}label();}unlock();celebrate('best');};
   label();
   return {update(room,joined){const phase=room?.phase||'',event=phase==='result-best'?'best':phase==='result-worst'?'worst':phase==='completed'||phase==='closed'?'ending':'';const key=event?`${room.id}:${event}`:'';if(key===lastEvent)return;stop();lastEvent=key;if(event&&joined)celebrate(event);},stop};
 }

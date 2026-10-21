@@ -288,3 +288,17 @@ test('finished room can be replaced without losing its archive; active room stil
  const created=await call({action:'create'});assert.equal(created.status,200);assert.equal(created.body.room.phase,'waiting');assert.notEqual(created.body.room.id,old.id);assert.deepEqual(await store.get('room-history/'+old.id),old);
  assert.equal((await call({action:'create'})).status,409);
 });
+
+test('self access requires current password, changes only signed-in account and revokes sessions',async()=>{
+ const store=new Store(),cookie=await login(store,'ana');
+ assert.equal((await authRequest(request('',{action:'self-access',username:'new'}),store)).status,401);
+ assert.equal((await authRequest(request(cookie,{action:'self-access',username:'ana-new',currentPassword:'wrong'}),store)).status,403);
+ assert.equal((await authRequest(request(cookie,{action:'self-access',username:'bruno',currentPassword:'test-password'}),store)).status,409);
+ const result=await authRequest(request(cookie,{action:'self-access',id:'bruno',username:'ana-new',currentPassword:'test-password',password:'new-password-123'}),store);
+ assert.equal(result.status,200);
+ const accounts=await store.get('accounts'),ana=accounts.find(a=>a.id==='ana'),bruno=accounts.find(a=>a.id==='bruno');
+ assert.equal(ana.username,'ana-new');assert.equal(bruno.username,'bruno');assert.equal(bruno.hash,configs.find(a=>a.id==='bruno').hash);assert.ok(ana.accessUpdatedAt);assert.ok(ana.passwordUpdatedAt);assert.equal(ana.accessUpdatedBy,'ana');
+ assert.equal((await authRequest(request(cookie,null,'GET'),store)).body.user,null);
+ const next=await authRequest(request('',{username:'ana-new',password:'new-password-123'}),store);assert.equal(next.status,200);assert.equal(next.body.user.role,'participant');
+ assert.equal(JSON.stringify(next.body).includes(ana.hash),false);
+});

@@ -76,6 +76,6 @@ export async function adminRequest(request,deps={}){
   await syncSheetGoals(gameStore,accountsStore,await users(accountsStore),deps.store?{url:deps.sheetUrl||''}:{});
   const game=await gameStore.get('game-state',{type:'json'})||{participants:[]};
   const accounts=await users(accountsStore);
-  return json({ok:true,sheetSync:{configured:!!sheetSource(),status:await accountsStore.get('sheet-sync-status',{type:'json'}),formUrl:process.env.MELHORES_GOALS_FORM_URL||null,lastSuccess:game.sheetSync?.lastSuccess||null},accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:(game.participants||[]).filter(p=>accounts.some(a=>(a.participantId||a.id)===p.id)),history:game.weeklyFactHistory||[]});
+  return json({ok:true,sheetSync:{configured:!!sheetSource(),status:await accountsStore.get('sheet-sync-status',{type:'json'}),formUrl:process.env.MELHORES_GOALS_FORM_URL||null,lastSuccess:game.sheetSync?.lastSuccess||null},accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,accessUpdatedAt:a.accessUpdatedAt||null,passwordUpdatedAt:a.passwordUpdatedAt||null,accessUpdatedBy:a.accessUpdatedBy||null,participantId:a.participantId||a.id})),participants:(game.participants||[]).filter(p=>accounts.some(a=>(a.participantId||a.id)===p.id)),history:game.weeklyFactHistory||[]});
  }catch(e){return json({ok:false,error:e.status?e.message:'Não foi possível gerenciar os usuários.'},e.status||503);}
 }

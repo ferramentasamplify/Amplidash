@@ -134,3 +134,5 @@ html[data-theme] .room-page .room-card,html[data-theme] .room-page .profile-goal
 .meeting-notice{display:flex;flex-direction:column;gap:12px;margin:20px 0;font-size:20px;font-weight:600;line-height:1.5}
 .meeting-countdown{font-size:clamp(28px,5vw,48px);font-variant-numeric:tabular-nums;letter-spacing:.03em}
 .meeting-notice small{font-size:12px;font-weight:400}
+.sound-test{border:1px solid #7d9fce;border-radius:12px;background:#173861;color:#fff;padding:10px 12px;font:600 13px 'Work Sans',sans-serif;cursor:pointer}
+html[data-theme=light] .sound-test{background:#c7dcfb;color:#082b72}.theme-control{flex-wrap:wrap}
