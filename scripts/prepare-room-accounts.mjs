@@ -1,0 +1,20 @@
+// Offline only: generates local credentials without creating remote accounts or publishing.
+import { readFile, mkdir, writeFile, chmod } from 'node:fs/promises';
+import { randomBytes, scryptSync } from 'node:crypto';
+import { resolve } from 'node:path';
+const [source, target] = process.argv.slice(2);
+if (!source || !target) throw new Error('Uso: node scripts/prepare-room-accounts.mjs estado.json pasta-privada');
+const state = JSON.parse(await readFile(source, 'utf8'));
+if (!state.ok || !Array.isArray(state.participants) || !state.participants.length) throw new Error('Base inválida ou vazia.');
+const people = state.participants.map(p=>({id:p.id,name:p.name}));
+if (!people.some(p=>p.id==='alexandre-neto')) people.push({id:'alexandre-neto',name:'Alexandre Neto'});
+if (new Set(people.map(p=>p.id)).size!==people.length || people.some(p=>!/^[a-z0-9-]{1,80}$/.test(p.id))) throw new Error('IDs inválidos ou duplicados.');
+const credentials=people.map(p=>({...p,username:p.id,password:randomBytes(15).toString('base64url')}));
+const accounts=credentials.map(({password,...p})=>{const salt=randomBytes(16).toString('hex');return {...p,salt,hash:scryptSync(password,salt,64).toString('hex')};});
+const dir=resolve(target);await mkdir(dir,{recursive:true,mode:0o700});await chmod(dir,0o700);
+const save=async(name,data)=>writeFile(resolve(dir,name),data,{mode:0o600,flag:'wx'});
+await save('credentials.json',JSON.stringify(credentials,null,2));
+await save('accounts-import.json',JSON.stringify({action:'import-accounts',accounts}));
+await save('netlify-bootstrap.env','MELHORES_USERS_JSON='+JSON.stringify(accounts.filter(a=>a.id==='alexandre-neto'))+'\n');
+await save('logins.txt','ACESSOS PREPARADOS — ATIVAÇÃO PENDENTE\nCada pessoa deve receber SOMENTE seu próprio acesso.\n\n'+credentials.map(c=>`${c.name}\nLogin: ${c.username}\nSenha: ${c.password}\nPerfil: ${c.id==='alexandre-neto'?'ADMINISTRADOR':'PARTICIPANTE'}\n`).join('\n'));
+console.log(`${accounts.length} acessos preparados em pasta privada. Nenhum acesso remoto foi criado.`);

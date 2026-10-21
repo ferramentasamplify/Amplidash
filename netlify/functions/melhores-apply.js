@@ -15,7 +15,7 @@ export async function handler(event) {
 
   connectLambda(event);
   const body = event.body ? JSON.parse(event.body) : {};
-  const response = await handleMelhoresApplyRequest(body);
+  const response = await handleMelhoresApplyRequest(body, event);
 
   return {
     statusCode: response.status,

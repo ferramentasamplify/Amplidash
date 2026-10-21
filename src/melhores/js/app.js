@@ -55,10 +55,12 @@ Object.entries(SFX).forEach(([key, audio]) => {
   audio.onerror = (e) => console.error(`Audio SFX: ${key} failed to load.`, e);
 });
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initializeAdminDashboard() {
   bindVotingEvents();
   await refreshDashboard('Carregando dados...');
-});
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeAdminDashboard);
+else queueMicrotask(() => initializeAdminDashboard().catch(e => { console.error(e); alert('Não foi possível carregar o painel: ' + e.message); }));
 
 function getButtonLabel(button) {
   return button?.querySelector('.btn-label');
@@ -541,12 +543,10 @@ let mgmtFlow = null; // 'LOGIN' | 'HOME' | 'ADD_PARTICIPANT' | 'USER_PROFILES' |
 let mgmtStep = 0;
 let mgmtData = {};
 const MGMT_CATEGORIES = CATEGORY_DEFINITIONS.filter(c => c.key !== 'bestWeek');
-const ADMIN_USERNAME = 'adm';
-const ADMIN_PASSWORD = 'adm';
 let adminPanelUnlocked = false;
 
 function isAdminAuthenticated() {
-  return adminPanelUnlocked;
+  return window.melhoresUser?.role === 'admin';
 }
 
 function setAdminAuthenticated() {
@@ -604,20 +604,7 @@ function openManagementLogin() {
 }
 
 function handleAdminLogin() {
-  const username = $('#mgmt-admin-login')?.value.trim() || '';
-  const password = $('#mgmt-admin-password')?.value || '';
-  const errorBox = $('#mgmt-admin-error');
-
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    setAdminAuthenticated();
-    startManageParticipantsFlow();
-    return;
-  }
-
-  if (errorBox) {
-    errorBox.hidden = false;
-    errorBox.textContent = 'Login ou senha inválidos. Use as credenciais de ADM.';
-  }
+  if (isAdminAuthenticated()) { setAdminAuthenticated(); startManageParticipantsFlow(); }
 }
 
 function handleManagementContentClick(event) {

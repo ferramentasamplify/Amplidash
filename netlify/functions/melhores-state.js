@@ -14,7 +14,7 @@ export async function handler(event) {
   }
 
   connectLambda(event);
-  const response = await handleMelhoresStateRequest();
+  const response = await handleMelhoresStateRequest(event);
 
   return {
     statusCode: response.status,

@@ -62,3 +62,13 @@
   from = "/api/melhores/saves"
   to = "/.netlify/functions/melhores-saves"
   status = 200
+
+[[redirects]]
+  from = "/api/melhores/auth"
+  to = "/.netlify/functions/melhores-auth"
+  status = 200
+
+[[redirects]]
+  from = "/api/melhores/room"
+  to = "/.netlify/functions/melhores-room"
+  status = 200

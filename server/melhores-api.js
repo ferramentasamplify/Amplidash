@@ -1,3 +1,4 @@
+import { requireAdmin } from './melhores-auth.js';
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'melhores-game';
@@ -11,7 +12,6 @@ function corsHeaders() {
   return {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
@@ -63,8 +63,10 @@ async function setSaves(saves) {
 /**
  * GET /api/melhores/state — retorna o estado completo do jogo
  */
-export async function handleMelhoresStateRequest() {
+export async function handleMelhoresStateRequest(request = {}) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     const state = await getGameState();
     return respond({
       ok: true,
@@ -83,8 +85,10 @@ export async function handleMelhoresStateRequest() {
  * POST /api/melhores/apply — salva o estado do jogo
  * Body: { participants, weeklyFactHistory }
  */
-export async function handleMelhoresApplyRequest(body = {}) {
+export async function handleMelhoresApplyRequest(body = {}, request = {}) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     const current = await getGameState();
 
     if (body.participants !== undefined) current.participants = body.participants;
@@ -102,8 +106,10 @@ export async function handleMelhoresApplyRequest(body = {}) {
 /**
  * POST /api/melhores/reset — zera o estado do jogo
  */
-export async function handleMelhoresResetRequest() {
+export async function handleMelhoresResetRequest(request = {}) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     await setGameState({ ...EMPTY_GAME_STATE });
     return respond({ ok: true, source: 'server' });
   } catch (error) {
@@ -117,8 +123,10 @@ export async function handleMelhoresResetRequest() {
  * GET  → retorna lista de saves
  * POST → body.action = 'create' | 'delete' | 'restore'
  */
-export async function handleMelhoresSavesRequest(body = {}, method = 'GET') {
+export async function handleMelhoresSavesRequest(body = {}, method = 'GET', request = {}) {
   try {
+    const denied = await requireAdmin(request);
+    if (denied) return denied;
     let saves = await getSaves();
 
     // ---- LIST ----

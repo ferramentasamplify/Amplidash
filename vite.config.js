@@ -1,7 +1,10 @@
+import { authRequest } from './server/melhores-auth.js';
+import { roomRequest } from './server/melhores-room.js';
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import {
   handleMelhoresApplyRequest,
+  handleMelhoresSavesRequest,
   handleMelhoresResetRequest,
   handleMelhoresStateRequest,
 } from './server/melhores-api.js';
@@ -95,19 +98,32 @@ export default defineConfig({
             return;
           }
 
+          if (['/api/melhores/auth', '/api/melhores/room'].includes(pathname)) {
+            try {
+              const handler = pathname.endsWith('/auth') ? authRequest : roomRequest;
+              sendJson(res, await handler({ method: req.method, headers: req.headers, body: req.method === 'POST' ? await readJsonBody(req) : {} }));
+            } catch { sendJson(res, { status: 400, headers: {}, body: { ok: false, error: 'Pedido inválido.' } }); }
+            return;
+          }
+
+          if (pathname === '/api/melhores/saves' && ['GET', 'POST'].includes(req.method)) {
+            sendJson(res, await handleMelhoresSavesRequest(req.method === 'POST' ? await readJsonBody(req) : {}, req.method, req));
+            return;
+          }
+
           if (pathname === '/api/melhores/state' && req.method === 'GET') {
-            sendJson(res, await handleMelhoresStateRequest());
+            sendJson(res, await handleMelhoresStateRequest(req));
             return;
           }
 
           if (pathname === '/api/melhores/apply' && req.method === 'POST') {
             const body = await readJsonBody(req);
-            sendJson(res, await handleMelhoresApplyRequest(body));
+            sendJson(res, await handleMelhoresApplyRequest(body, req));
             return;
           }
 
           if (pathname === '/api/melhores/reset' && req.method === 'POST') {
-            sendJson(res, await handleMelhoresResetRequest());
+            sendJson(res, await handleMelhoresResetRequest(req));
             return;
           }
 

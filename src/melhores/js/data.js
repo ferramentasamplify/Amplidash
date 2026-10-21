@@ -127,14 +127,11 @@ function scheduleSyncToServer() {
 }
 
 async function fetchServerState() {
-  try {
-    const res = await fetch(`${API_BASE}/state`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.ok ? data : null;
-  } catch {
-    return null;
-  }
+  const res = await fetch(`${API_BASE}/state`);
+  if (!res.ok) throw new Error('Não foi possível carregar a base do servidor.');
+  const data = await res.json();
+  if (!data.ok) throw new Error('Resposta inválida do servidor.');
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,31 +318,16 @@ export function getWeeklyFactHistory() {
 export async function loadParticipantsData() {
   const serverData = await fetchServerState();
 
-  if (serverData && serverData.participants && serverData.participants.length > 0) {
-    // Server tem dados — usar como fonte da verdade
-    _skipSync = true;
-
+  if (!Array.isArray(serverData.participants)) throw new Error('Base de participantes inválida.');
+  _skipSync = true;
+  try {
     removedParticipantIds = normalizeRemovedParticipantIds(serverData.removedParticipantIds);
     participantState = hydrateParticipantState(serverData.participants);
     weeklyFactHistory = normalizeWeeklyFactHistory(serverData.weeklyFactHistory || []);
-
-    // Atualiza cache local
     writeStoredRemovedParticipantIds(removedParticipantIds);
     writeStoredState(participantState);
     writeStoredWeeklyFactHistory(weeklyFactHistory);
-
-    _skipSync = false;
-  } else {
-    // Server vazio — usar dados locais + migrar para o servidor
-    const local = readStoredState();
-    if (local && local.length > 0) {
-      removedParticipantIds = readStoredRemovedParticipantIds();
-      participantState = hydrateParticipantState(local);
-      weeklyFactHistory = normalizeWeeklyFactHistory(readStoredWeeklyFactHistory() || []);
-      // Migrar para o servidor
-      scheduleSyncToServer();
-    }
-  }
+  } finally { _skipSync = false; }
 
   return {
     participants: participantState,
