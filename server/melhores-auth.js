@@ -9,7 +9,7 @@ export async function users(store) {
   if (!Array.isArray(list) || !list.length) throw new Error('Contas não configuradas no servidor.');
   return list.map(u => ({ ...u, role: u.id === 'alexandre-neto' ? 'admin' : 'participant' }));
 }
-export function publicUser(u) { return { id: u.id, name: u.name, username: u.username, role: u.role }; }
+export function publicUser(u) { return { id: u.id, name: u.name, username: u.username, role: u.role, participantId:u.participantId||u.id }; }
 export function sameOrigin(request) {
   const h = request.headers || {};
   const origin = h.origin || h.Origin;
@@ -29,7 +29,7 @@ export async function authenticate(request, store) {
   const session = await store.get(key, { type: 'json' });
   if (!session || session.expires < Date.now()) return null;
   const user = (await users(store)).find(u => u.id === session.userId);
-  return user && session.version === digest(user.hash) ? publicUser(user) : null;
+  return user && !user.disabled && session.version === digest(user.hash + (user.sessionVersion||'')) ? publicUser(user) : null;
 }
 export async function requireAdmin(request, store) {
   if (!sameOrigin(request)) return json({ ok: false, error: 'Origem não permitida.' }, 403);
@@ -87,10 +87,10 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
     const salt = user?.salt || '00000000000000000000000000000000';
     const actual = scryptSync(password, salt, 64);
     const expected = Buffer.from(user?.hash || '00'.repeat(64), 'hex');
-    if (!user || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return json({ ok: false, error: 'Login ou senha inválidos.' }, 401);
+    if (!user || user.disabled || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return json({ ok: false, error: 'Login ou senha inválidos.' }, 401);
     await store.delete(key); // Successful logins must not accumulate toward the failure limit.
     const token = randomBytes(32).toString('hex');
-    await store.setJSON('sessions/' + digest(token), { userId: user.id, expires: Date.now() + 12 * 3600e3, version: digest(user.hash) });
+    await store.setJSON('sessions/' + digest(token), { userId: user.id, expires: Date.now() + 12 * 3600e3, version: digest(user.hash + (user.sessionVersion||'')) });
     return json({ ok: true, user: publicUser(user) }, 200, { 'Set-Cookie': cookie(token) + '; Max-Age=43200' });
   } catch (e) { console.error('[auth] ' + e.name + ': ' + e.message); return json({ ok: false, code: e.message.includes('uncachedEdgeURL') ? 'BLOBS_STRONG_CONTEXT' : e.message.includes('Contas não configuradas') ? 'AUTH_CONFIG' : e.name, error: 'Não foi possível autenticar. Confira a configuração do servidor.' }, e.status || 503); }
 }

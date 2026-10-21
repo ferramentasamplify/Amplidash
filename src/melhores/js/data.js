@@ -108,21 +108,28 @@ function writeStoredRemovedParticipantIds(ids = removedParticipantIds) {
 
 const API_BASE = '/api/melhores';
 let _syncTimer = null;
+let _serverRevision = null;
+let _syncQueue = Promise.resolve();
 let _skipSync = false;
 
 function scheduleSyncToServer() {
   if (_skipSync) return;
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(() => {
-    fetch(`${API_BASE}/apply`, {
+    const snapshot={participants:structuredClone(participantState),weeklyFactHistory:structuredClone(weeklyFactHistory),removedParticipantIds:[...removedParticipantIds]};
+    _syncQueue=_syncQueue.catch(()=>{}).then(async()=>{
+    const res=await fetch(`${API_BASE}/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        participants: participantState,
-        weeklyFactHistory,
-        removedParticipantIds: [...removedParticipantIds],
-      }),
-    }).catch((err) => console.warn('[sync] Server sync failed:', err.message));
+      body: JSON.stringify({...snapshot,expectedRevision:_serverRevision}),
+    });
+    const data=await res.json();
+    if(!res.ok){
+      if(res.status===409){alert('Os dados foram atualizados em outra tela. A página será recarregada para preservar as alterações.');location.reload();}
+      throw new Error(data.error||'Falha no salvamento.');
+    }
+    _serverRevision=data.revision;
+    }).catch(err=>console.warn('[sync] Server sync failed:',err.message));
   }, 400);
 }
 
@@ -131,6 +138,7 @@ async function fetchServerState() {
   if (!res.ok) throw new Error('Não foi possível carregar a base do servidor.');
   const data = await res.json();
   if (!data.ok) throw new Error('Resposta inválida do servidor.');
+  _serverRevision=data.revision;
   return data;
 }
 

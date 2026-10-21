@@ -72,3 +72,8 @@
   from = "/api/melhores/room"
   to = "/.netlify/functions/melhores-room"
   status = 200
+
+[[redirects]]
+  from = "/api/melhores/admin"
+  to = "/.netlify/functions/melhores-admin"
+  status = 200

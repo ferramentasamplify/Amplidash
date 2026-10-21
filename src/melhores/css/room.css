@@ -2,3 +2,4 @@
 
 .room-avatar{width:42px;height:42px;object-fit:cover;border-radius:50%;margin:0 12px 4px 0;vertical-align:middle}
 #room-members{max-height:440px;overflow:auto}@media(max-width:720px){#room-stage{order:-1}#room-members{max-height:260px}}
+#admin-panel{max-width:1100px;margin:0 auto;padding:20px}#admin-panel .room-card{margin-bottom:20px}#admin-panel label{display:block;margin:14px 0}#admin-panel select{width:100%;padding:12px;background:#111a36;color:#fff;border:1px solid #59647e;border-radius:8px}#admin-panel .admin-user{border-top:1px solid #46506a;padding:16px 0}#admin-panel .admin-user[hidden]{display:none}#admin-panel textarea{width:100%;box-sizing:border-box}#admin-panel input{box-sizing:border-box;width:100%}

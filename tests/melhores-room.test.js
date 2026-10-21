@@ -176,3 +176,24 @@ test('presence expires independently from completion; same login reconnects to c
  let member=(await call(admin)).body.room.members[0];assert.equal(member.online,false);assert.equal(member.done,true);
  const rejoined=await login(store,'ana');member=(await call(rejoined)).body.room.members[0];assert.equal(member.online,true);assert.equal(member.draft.best,'best');
 });
+
+test('admin directory protects credentials, edits goals with conflicts and revokes disabled sessions',async()=>{
+ const {adminRequest}=await import('../server/melhores-admin.js');
+ const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const call=(cookie,body)=>adminRequest(request(cookie,body,body?'POST':'GET'),{store,gameStore});
+ assert.equal((await call(ana)).status,403);
+ let list=await call(admin);assert.equal(list.status,200);assert.equal(list.body.accounts[0].hash,undefined);assert.equal(list.body.accounts[0].salt,undefined);
+ const objectives=Object.fromEntries(['exercicio','familia','alimentacao','hobbies','conhecimentos'].map(k=>[k,'Nova meta '+k]));
+ let body={action:'save-profile',id:'ana',name:'Ana',objectives,expectedObjectives:JSON.stringify(game.participants[1].objectives)};
+ assert.equal((await call(admin,body)).status,200);
+ assert.equal((await call(admin,body)).status,409);
+ const saved=await gameStore.get('game-state');assert.deepEqual(saved.participants[1].objectives,objectives);assert.deepEqual(saved.participants[0],game.participants[0]);
+ assert.equal((await call(admin,{action:'account-status',id:'alexandre-neto',disabled:true})).status,400);
+ assert.equal((await call(admin,{action:'account-status',id:'ana',disabled:true})).status,200);
+ assert.equal((await authRequest(request(ana,null,'GET'),store)).body.user,null);
+ assert.equal((await authRequest(request('',{username:'ana',password:'test-password'}),store)).status,401);
+ await call(admin,{action:'account-status',id:'ana',disabled:false});
+ assert.equal((await authRequest(request(ana,null,'GET'),store)).body.user,null);
+ assert.equal((await authRequest(request('',{username:'ana',password:'test-password'}),store)).status,200);
+});

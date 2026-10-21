@@ -99,7 +99,7 @@ export async function roomRequest(request, deps = {}) {
     } else if (request.method !== 'GET') return json({ ok: false }, 405);
     const room = await store.get('active-room', { type: 'json' });
     const game = deps.game || await getStore({ name: 'melhores-game', consistency: 'strong' }).get('game-state', { type: 'json' }) || {};
-    const profile = (game.participants || []).find(p => p.id === user.id);
+    const profile = (game.participants || []).find(p => p.id === user.participantId);
     if (!room) return json({ ok: true, user, profile: profile ? {name:profile.name,photoUrl:profile.photoUrl,objectives:profile.objectives} : { name: user.name }, room: null, serverTime: Date.now() });
     if (room.phase === 'closed' && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
       const gameStore = deps.gameStore || getStore({name:'melhores-game',consistency:'strong'});
@@ -108,12 +108,13 @@ export async function roomRequest(request, deps = {}) {
         gameState.appliedRooms ||= [];
         if (gameState.appliedRooms.includes(room.id)) return gameState;
         for (const p of gameState.participants) {
-          if (!room.members.includes(p.id)) continue;
+          const memberId = room.members.find(id => (accounts.find(a=>a.id===id)?.participantId||id)===p.id);
+          if (!memberId) continue;
           p.categories ||= {}; p.scoreBreakdown ||= {};
-          for (const key of categories) p.categories[key] = Number(p.categories[key]||0) + ({done:1,missed:0,absent:-1}[room.goalResults[p.id][key]]);
-          if (p.id === room.results.best.winner) p.scoreBreakdown.melhorFato = Number(p.scoreBreakdown.melhorFato||0)+1;
-          if (p.id === room.results.worst.winner) p.scoreBreakdown.piorFato = Number(p.scoreBreakdown.piorFato||0)+1;
-          p.categories.bestWeek = Number(p.categories.bestWeek||0) + Number(p.id===room.results.best.winner) + Number(p.id===room.results.worst.winner);
+          for (const key of categories) p.categories[key] = Number(p.categories[key]||0) + ({done:1,missed:0,absent:-1}[room.goalResults[memberId][key]]);
+          if (memberId === room.results.best.winner) p.scoreBreakdown.melhorFato = Number(p.scoreBreakdown.melhorFato||0)+1;
+          if (memberId === room.results.worst.winner) p.scoreBreakdown.piorFato = Number(p.scoreBreakdown.piorFato||0)+1;
+          p.categories.bestWeek = Number(p.categories.bestWeek||0) + Number(memberId===room.results.best.winner) + Number(memberId===room.results.worst.winner);
           p.totalPoints = Object.values(p.categories).reduce((sum,n)=>sum+Number(n||0),0);
         }
         gameState.appliedRooms.push(room.id); return gameState;
@@ -125,7 +126,7 @@ export async function roomRequest(request, deps = {}) {
     if (room.phase === 'closed') await store.setJSON('room-history/' + room.id, room);
     const rows = await Promise.all(room.members.map(async id => {
       const account = accounts.find(u => u.id === id);
-      const participant = (game.participants || []).find(p => p.id === id);
+      const participant = (game.participants || []).find(p => p.id === (account?.participantId||id));
       const draft = await store.get(`rooms/${room.id}/${id}`, { type: 'json' });
       const seen = await store.get(`presence/${room.id}/${id}`, {type:'json'});
       const revealed = (room.phase === 'presenting' && room.members[room.current] === id) || /^(voting|tie|result)-/.test(room.phase);

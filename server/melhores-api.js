@@ -1,6 +1,8 @@
-import { requireAdmin } from './melhores-auth.js';
+import { createHash } from 'node:crypto';
+import { requireAdmin, update } from './melhores-auth.js';
 import { getStore } from '@netlify/blobs';
 
+const revision = state => createHash('sha256').update(JSON.stringify(state)).digest('hex');
 const STORE_NAME = 'melhores-game';
 const EMPTY_GAME_STATE = {
   participants: [],
@@ -26,7 +28,7 @@ function respond(payload, status = 200) {
 // ---------------------------------------------------------------------------
 
 async function getGameState() {
-  const store = getStore(STORE_NAME);
+  const store = getStore({name:STORE_NAME,consistency:'strong'});
   const raw = await store.get('game-state');
   if (!raw) return { ...EMPTY_GAME_STATE };
   try {
@@ -40,19 +42,19 @@ async function getGameState() {
 }
 
 async function setGameState(state) {
-  const store = getStore(STORE_NAME);
+  const store = getStore({name:STORE_NAME,consistency:'strong'});
   await store.set('game-state', JSON.stringify(state));
 }
 
 async function getSaves() {
-  const store = getStore(STORE_NAME);
+  const store = getStore({name:STORE_NAME,consistency:'strong'});
   const raw = await store.get('game-saves');
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }
 }
 
 async function setSaves(saves) {
-  const store = getStore(STORE_NAME);
+  const store = getStore({name:STORE_NAME,consistency:'strong'});
   await store.set('game-saves', JSON.stringify(saves));
 }
 
@@ -70,6 +72,7 @@ export async function handleMelhoresStateRequest(request = {}) {
     const state = await getGameState();
     return respond({
       ok: true,
+      revision: revision(state),
       participants: state.participants || [],
       weeklyFactHistory: state.weeklyFactHistory || [],
       removedParticipantIds: state.removedParticipantIds || [],
@@ -77,7 +80,7 @@ export async function handleMelhoresStateRequest(request = {}) {
     });
   } catch (error) {
     console.error('[state] Error:', error);
-    return respond({ ok: false, error: error.message, source: 'server' }, 500);
+    return respond({ ok: false, error: error.message, source: 'server' }, error.status||500);
   }
 }
 
@@ -89,17 +92,19 @@ export async function handleMelhoresApplyRequest(body = {}, request = {}) {
   try {
     const denied = await requireAdmin(request);
     if (denied) return denied;
-    const current = await getGameState();
-
-    if (body.participants !== undefined) current.participants = body.participants;
-    if (body.weeklyFactHistory !== undefined) current.weeklyFactHistory = body.weeklyFactHistory;
-    if (body.removedParticipantIds !== undefined) current.removedParticipantIds = body.removedParticipantIds;
-
-    await setGameState(current);
-    return respond({ ok: true, source: 'server' });
+    const store=getStore({name:STORE_NAME,consistency:'strong'});
+    const state=await update(store,'game-state',old=>{
+      const current={...EMPTY_GAME_STATE,...(old||{})};
+      if(!body.expectedRevision || body.expectedRevision!==revision(current))throw Object.assign(new Error('Os dados mudaram. Atualize a página antes de salvar.'),{status:409});
+      if(body.participants!==undefined)current.participants=body.participants;
+      if(body.weeklyFactHistory!==undefined)current.weeklyFactHistory=body.weeklyFactHistory;
+      if(body.removedParticipantIds!==undefined)current.removedParticipantIds=body.removedParticipantIds;
+      return current;
+    });
+    return respond({ok:true,revision:revision(state),source:'server'});
   } catch (error) {
     console.error('[apply] Error:', error);
-    return respond({ ok: false, error: error.message, source: 'server' }, 500);
+    return respond({ ok: false, error: error.message, source: 'server' }, error.status||500);
   }
 }
 
@@ -114,7 +119,7 @@ export async function handleMelhoresResetRequest(request = {}) {
     return respond({ ok: true, source: 'server' });
   } catch (error) {
     console.error('[reset] Error:', error);
-    return respond({ ok: false, error: error.message, source: 'server' }, 500);
+    return respond({ ok: false, error: error.message, source: 'server' }, error.status||500);
   }
 }
 

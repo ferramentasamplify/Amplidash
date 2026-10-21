@@ -30,11 +30,10 @@ async function shell() {
   if(toggle) toggle.onclick=async()=>{
     try {
       toggle.disabled=true;
-      const panel=document.getElementById('legacy-panel');
-      if(!adminLoaded){ toggle.textContent='Carregando painel…'; const app=await import('./app.js'); await app.adminDashboardReady; adminLoaded=true; }
-      panel.hidden=!panel.hidden;
-      toggle.textContent=panel.hidden?'Painel adm':'Ocultar painel';
-      if(!panel.hidden) panel.scrollIntoView({behavior:'smooth'});
+      let panel=document.getElementById('admin-panel');
+      if(!panel){panel=document.createElement('section');panel.id='admin-panel';panel.hidden=true;root.after(panel);}
+      if(panel.hidden){const {openAdminPanel}=await import('./admin.js');await openAdminPanel(panel,api);adminLoaded=true;toggle.textContent='Ocultar painel';panel.scrollIntoView({behavior:'smooth'});}
+      else{panel.hidden=true;document.getElementById('legacy-panel').hidden=true;toggle.textContent='Painel adm';}
     }catch(e){toggle.textContent='Painel adm';error(e.message);}finally{toggle.disabled=false;}
   };
   root.addEventListener('click', async e => {

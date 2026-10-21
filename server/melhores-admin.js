@@ -1,0 +1,47 @@
+import { getStore } from '@netlify/blobs';
+import { requireAdmin, users, json, update } from './melhores-auth.js';
+const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
+const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
+export async function adminRequest(request,deps={}){
+ try{
+  const accountsStore=deps.store||getStore({name:'melhores-private',consistency:'strong'});
+  const denied=await requireAdmin(request,accountsStore);if(denied)return denied;
+  const gameStore=deps.gameStore||getStore({name:'melhores-game',consistency:'strong'});
+  const body=request.body||{};
+  if(request.method==='POST'){
+   if(body.action==='account-status'){
+    await update(accountsStore,'accounts',existing=>{
+     const list=existing||JSON.parse(process.env.MELHORES_USERS_JSON||'[]');
+     const account=list.find(a=>a.id===body.id);if(!account)fail('Login não encontrado.',404);
+     if(body.action==='account-status'){
+      if(typeof body.disabled!=='boolean')fail('Status inválido.');
+      if(account.id==='alexandre-neto'&&body.disabled)fail('O acesso do administrador não pode ser desativado.');
+      // Changing this version revokes existing sessions even after reactivation.
+      account.disabled=body.disabled;account.sessionVersion=Date.now().toString();
+     }
+     return list;
+    });
+   }else if(body.action==='save-profile'){
+    if(typeof body.name!=='string'||!body.name.trim()||body.name.length>100)fail('Informe um nome válido.');
+    if(!body.objectives||keys.some(k=>typeof body.objectives[k]!=='string'||body.objectives[k].length>4000))fail('Informe as cinco metas (até 4.000 caracteres cada).');
+    const accountList=await users(accountsStore);
+    await update(gameStore,'game-state',state=>{
+     state||={participants:[],weeklyFactHistory:[],removedParticipantIds:[]};
+     let p=state.participants.find(p=>p.id===body.id);
+     if(!p){
+      if(!accountList.some(a=>(a.participantId||a.id)===body.id))fail('Participante não encontrado.',404);
+      if(state.removedParticipantIds?.includes(body.id))fail('Este perfil foi removido. Restaure-o antes de editar.',409);
+      p={id:body.id,name:body.name,objectives:{},categories:Object.fromEntries([...keys,'bestWeek'].map(k=>[k,0])),scoreBreakdown:{melhorFato:0,piorFato:0},totalPoints:0};state.participants.push(p);
+     }
+     if(JSON.stringify(p.objectives||{})!==body.expectedObjectives)fail('As metas mudaram em outra janela. Atualize antes de salvar.',409);
+     p.name=body.name.trim();p.objectives=Object.fromEntries(keys.map(k=>[k,body.objectives[k].trim()]));
+     p.objectiveModeration=Object.fromEntries(keys.map(k=>[k,{reporterIds:[],flagged:false}]));
+     return state;
+    });
+   }else fail('Ação inválida.');
+  }else if(request.method!=='GET')return json({ok:false},405);
+  const game=await gameStore.get('game-state',{type:'json'})||{participants:[]};
+  const accounts=await users(accountsStore);
+  return json({ok:true,accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:game.participants||[],history:game.weeklyFactHistory||[]});
+ }catch(e){return json({ok:false,error:e.status?e.message:'Não foi possível gerenciar os usuários.'},e.status||503);}
+}
