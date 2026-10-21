@@ -416,7 +416,7 @@ function renderDashboard() {
   renderWeeklyFactHistory();
 }
 
-async function refreshDashboard(loadingLabel = 'Carregando...') {
+export async function refreshDashboard(loadingLabel = 'Carregando...') {
   const startButton = $('#start-voting-btn');
   const resetButton = $('#reset-scores-btn');
 

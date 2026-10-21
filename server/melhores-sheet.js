@@ -1,7 +1,9 @@
 import { update } from './melhores-auth.js';
+export const SHEET_DATA_URL='https://docs.google.com/spreadsheets/d/1NScAndOyqQkw5CUKqQp9jOEWlj-B1YwgzyvDY-0NYxc/export?format=csv&gid=417247986';
+export const sheetSource=()=>process.env.MELHORES_SHEET_DATA_URL||SHEET_DATA_URL;
 const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-const aliases={camilaandrade:'camila',rhuandavyd:'rhuan',vitorhugobotelhoferreira:'vitor'};
+const aliases={camilaandrade:'camila',rhuandavyd:'rhuan',vitorhugobotelhoferreira:'vitor',brunomelimzardo:'bruno',alexandre:'alexandre-neto'};
 export function sheetRows(text){
  if(text.trim().startsWith('{')){const d=JSON.parse(text);if(!Array.isArray(d.values))throw Error('Planilha sem linhas válidas.');return d.values;}
  const rows=[];let row=[],field='',quoted=false;
@@ -11,20 +13,24 @@ export function sheetRows(text){
 export function applySheetRows(state,rows,accounts,now=new Date().toISOString()){
  if(!Array.isArray(rows)||rows.length<2||!norm(rows[0]?.[1]).includes('nome'))throw Error('Confira a aba de respostas e a coluna Nome.');
  const activeIds=new Set(accounts.map(a=>a.participantId||a.id)),report={matched:[],unmatched:[]};
- for(const p of state.participants||[])if(activeIds.has(p.id))p.sheetEnrollment={active:false,checkedAt:now};
+ state.participants||=[];state.removedParticipantIds=(state.removedParticipantIds||[]).filter(id=>!activeIds.has(id));
+ for(const a of accounts){const id=a.participantId||a.id;if(!state.participants.some(p=>p.id===id)&&!state.removedParticipantIds?.includes(id))state.participants.push({id,name:a.name,objectives:{},categories:Object.fromEntries([...keys,'bestWeek'].map(k=>[k,0])),scoreBreakdown:{melhorFato:0,piorFato:0},totalPoints:0});}
+ for(const p of state.participants)if(activeIds.has(p.id))p.sheetEnrollment={...p.sheetEnrollment,active:false,checkedAt:now};
  // Google Forms appends responses; the latest complete response wins for each person.
  for(const row of rows.slice(1)){
   if(!row[1]?.trim())continue;const name=norm(row[1]);
-  const matched=(state.participants||[]).filter(p=>activeIds.has(p.id)&&(norm(p.name)===name||norm(p.id)===name||p.id===aliases[name]));
+  const matched=(state.participants||[]).filter(p=>activeIds.has(p.id)&&(norm(p.name)===name||norm(p.id)===name||accounts.some(a=>(a.participantId||a.id)===p.id&&norm(a.name)===name)||p.id===aliases[name]));
   if(matched.length!==1){report.unmatched.push(String(row[1]).trim());continue;}
   const p=matched[0],objectives=Object.fromEntries(keys.map((key,i)=>[key,String(row[i+2]||'').trim()]));
   if(Object.values(objectives).some(v=>!v||v.length>4000))continue;
-  p.objectives=objectives;p.sheetEnrollment={active:true,checkedAt:now,responseAt:String(row[0]||'')};report.matched.push(p.id);
+  const responseSignature=JSON.stringify(row.slice(0,7));
+  if(p.sheetEnrollment?.responseSignature!==responseSignature)p.objectives=objectives;
+  p.sheetEnrollment={active:true,checkedAt:now,responseAt:String(row[0]||''),responseSignature};report.matched.push(p.id);
  }
  state.sheetSync={lastSuccess:now,matched:[...new Set(report.matched)].length,unmatched:report.unmatched};return state;
 }
 export async function syncSheetGoals(gameStore,accountsStore,accounts,options={}){
- const url=options.url||process.env.MELHORES_SHEET_DATA_URL;if(!url)return;
+ const url=options.url??sheetSource();if(!url)return;
  const parsed=new URL(url);if(parsed.protocol!=='https:'||!['docs.google.com','sheets.googleapis.com'].includes(parsed.hostname))throw Error('Fonte da planilha não permitida.');
  const now=Date.now();let acquired=false;
  const lock=await update(accountsStore,'sheet-sync-lock',old=>{acquired=false;if(old?.until>now)return old;acquired=true;return {until:now+60000};});

@@ -92,10 +92,11 @@ export async function roomRequest(request, deps = {}) {
             const id = room.members[room.current];
             if (body.target !== id) fail('A pessoa da vez mudou. Atualize a tela.',409);
             if (body.result === 'absent' && presence[id]?.seen > Date.now()-20000) fail('Esta pessoa está conectada.');
-            room.goalResults[id] ||= {}; room.goalResults[id][body.category] = body.result;
+            room.goalResults[id] ||= {}; room.goalResults[id][body.category] = body.category==='exercicio'&&body.result==='done'&&body.gymrats!==true?'missed':body.result;
           } else if (action === 'next-goal') {
             if (room.phase !== 'goals' || !categories.every(k => room.goalResults[room.members[room.current]]?.[k])) fail('Marque as cinco metas antes de avançar.',409);
-            if (room.current === room.members.length-1) room.phase = 'completed'; else room.current++;
+            if (body.target && body.target !== room.members[room.current]) fail('A pessoa da vez mudou. Atualize a tela.',409);
+            if (room.current === room.members.length-1) {room.phase = 'completed';room.completedAt=new Date().toISOString();} else room.current++;
           } else if (action === 'close') {
             if (room.phase === 'closed') fail('A sala já foi encerrada.', 409);
             room.phase = 'closed'; room.closedAt = new Date().toISOString();
@@ -104,13 +105,25 @@ export async function roomRequest(request, deps = {}) {
         });
       }
     } else if (request.method !== 'GET') return json({ ok: false }, 405);
-    const room = await store.get('active-room', { type: 'json' });
+    let room = await store.get('active-room', { type: 'json' });
+    if(room?.members.includes(user.id)&&room.phase!=='closed')await store.setJSON(`presence/${room.id}/${user.id}`,{seen:Date.now()});
+    if(room?.phase==='goals'){
+      const target=room.members[room.current],seen=await store.get(`presence/${room.id}/${target}`,{type:'json'});
+      if(!seen||seen.seen<Date.now()-60000){
+        room=await update(store,'active-room',current=>{
+          if(current?.id===room.id&&current.phase==='goals'&&current.members[current.current]===target){
+            current.goalResults||={};current.goalResults[target]||={};
+            for(const key of categories)current.goalResults[target][key]||='absent';
+          }return current;
+        });
+      }
+    }
     const profileStore=deps.gameStore||(!deps.game?getStore({name:'melhores-game',consistency:'strong'}):null);
-    if(profileStore)await syncSheetGoals(profileStore,store,accounts);
+    if(profileStore)await syncSheetGoals(profileStore,store,accounts,deps.store?{url:deps.sheetUrl||''}:{});
     let game = deps.game || await profileStore.get('game-state',{type:'json'}) || {};
     const profile = (game.participants || []).find(p => p.id === user.participantId);
     if (!room) return json({ ok: true, user, profile:personalProfile(game,user), room: null, serverTime: Date.now() });
-    if (room.phase === 'closed' && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
+    if (['completed','closed'].includes(room.phase) && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
       const gameStore = deps.gameStore || getStore({name:'melhores-game',consistency:'strong'});
       const winnerFact=async(kind)=>{
         const accountId=room.results[kind].winner;
@@ -123,7 +136,7 @@ export async function roomRequest(request, deps = {}) {
         gameState ||= {participants:[]};
         gameState.appliedRooms ||= [];
         gameState.weeklyFactHistory ||= [];
-        if(!gameState.weeklyFactHistory.some(entry=>entry.id==='room-'+room.id))gameState.weeklyFactHistory.push({id:'room-'+room.id,date:room.closedAt.slice(0,10),best,worst});
+        if(!gameState.weeklyFactHistory.some(entry=>entry.id==='room-'+room.id))gameState.weeklyFactHistory.push({id:'room-'+room.id,date:(room.completedAt||room.closedAt||new Date().toISOString()).slice(0,10),best,worst});
         if (gameState.appliedRooms.includes(room.id)) return gameState;
         for (const p of gameState.participants) {
           const memberId = room.members.find(id => (accounts.find(a=>a.id===id)?.participantId||id)===p.id);

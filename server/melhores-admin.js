@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync } from 'node:crypto';
-import { applySheetRows, syncSheetGoals } from './melhores-sheet.js';
+import { applySheetRows, syncSheetGoals, sheetSource } from './melhores-sheet.js';
 import { getStore } from '@netlify/blobs';
 import { requireAdmin, users, json, update } from './melhores-auth.js';
 const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
@@ -25,6 +25,7 @@ export async function adminRequest(request,deps={}){
      if(hash){a.salt=salt;a.hash=hash;a.sessionVersion=randomBytes(16).toString('hex');}
      return list;
     });
+    await update(gameStore,'game-state',state=>{if(state){const p=state.participants?.find(p=>p.id===body.id);if(p)p.name=body.name.trim();}return state;});
    }else if(body.action==='delete-account'){
     if(body.id==='alexandre-neto')fail('O administrador não pode ser excluído.');
     const account=(await users(accountsStore)).find(a=>a.id===body.id);if(!account)fail('Login não encontrado.',404);
@@ -72,9 +73,9 @@ export async function adminRequest(request,deps={}){
     });
    }else fail('Ação inválida.');
   }else if(request.method!=='GET')return json({ok:false},405);
-  await syncSheetGoals(gameStore,accountsStore,await users(accountsStore));
+  await syncSheetGoals(gameStore,accountsStore,await users(accountsStore),deps.store?{url:deps.sheetUrl||''}:{});
   const game=await gameStore.get('game-state',{type:'json'})||{participants:[]};
   const accounts=await users(accountsStore);
-  return json({ok:true,sheetSync:{configured:!!process.env.MELHORES_SHEET_DATA_URL,formUrl:process.env.MELHORES_GOALS_FORM_URL||null,lastSuccess:game.sheetSync?.lastSuccess||null},accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:(game.participants||[]).filter(p=>accounts.some(a=>(a.participantId||a.id)===p.id)),history:game.weeklyFactHistory||[]});
+  return json({ok:true,sheetSync:{configured:!!sheetSource(),status:await accountsStore.get('sheet-sync-status',{type:'json'}),formUrl:process.env.MELHORES_GOALS_FORM_URL||null,lastSuccess:game.sheetSync?.lastSuccess||null},accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:(game.participants||[]).filter(p=>accounts.some(a=>(a.participantId||a.id)===p.id)),history:game.weeklyFactHistory||[]});
  }catch(e){return json({ok:false,error:e.status?e.message:'Não foi possível gerenciar os usuários.'},e.status||503);}
 }

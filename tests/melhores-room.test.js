@@ -102,7 +102,7 @@ test('native Netlify adapter forwards cookies and rejects bad JSON, huge payload
  const invoke=async request=>serve(request, r=>({status:200,headers:{'Content-Type':'application/json'},body:{method:r.method,host:r.headers.host,cookie:r.headers.cookie}}));
  const response=await invoke(new Request('https://example.com/api',{headers:{cookie:'test=1'}}));assert.deepEqual(await response.json(),{method:'GET',host:'example.com',cookie:'test=1'});
  assert.equal((await invoke(new Request('https://example.com/api',{method:'POST',body:'{broken'}))).status,400);
- assert.equal((await invoke(new Request('https://example.com/api',{method:'POST',body:'x'.repeat(100001)}))).status,413);
+ assert.equal((await invoke(new Request('https://example.com/api',{method:'POST',body:'x'.repeat(600001)}))).status,413);
  assert.equal((await invoke(new Request('https://example.com/api',{method:'DELETE'}))).status,405);
  const state=await import('../netlify/functions/melhores-state.js');assert.equal((await state.default(new Request('https://example.com/api/melhores/state'))).status,401);
  const reset=await import('../netlify/functions/melhores-reset.js');assert.equal((await reset.default(new Request('https://example.com/api/melhores/reset'))).status,405);
@@ -155,10 +155,12 @@ test('live votes reject self-votes, hide ballots, require admin tie-break; goals
  for(const id of ['alexandre-neto','ana','bruno']){
    assert.equal((await act(admin,'next-goal')).status,409);
    if(id==='bruno')await store.setJSON(`presence/${roomId}/${id}`,{seen:Date.now()-60000});
-   for(const category of ['exercicio','familia','alimentacao','hobbies','conhecimentos'])assert.equal((await act(admin,'mark',{target:id,category,result:id==='bruno'?'absent':id==='ana'?'missed':'done'})).status,200);
+   for(const category of ['exercicio','familia','alimentacao','hobbies','conhecimentos'])assert.equal((await act(admin,'mark',{target:id,category,gymrats:true,result:id==='bruno'?'absent':id==='ana'?'missed':'done'})).status,200);
    await act(admin,'next-goal');
  }
- await act(admin,'close');const scored=await gameStore.get('game-state');
+ assert.equal((await call(admin)).body.room.phase,'completed');
+ const beforeClose=await gameStore.get('game-state');assert.ok(beforeClose.appliedRooms.includes(roomId));
+ await act(admin,'close');assert.deepEqual(await gameStore.get('game-state'),beforeClose);const scored=await gameStore.get('game-state');
  assert.equal(scored.participants.find(p=>p.id==='alexandre-neto').categories.familia,1);
  assert.equal(scored.participants.find(p=>p.id==='ana').categories.bestWeek,1);
  assert.equal(scored.participants.find(p=>p.id==='bruno').categories.familia,-1);
@@ -248,4 +250,32 @@ test('admin can replace portrait and credentials; old sessions revoked and dupli
  assert.equal((await authRequest(request('',{username:'ana.nova',password:'new-password-123'}),store)).status,200);
  const response=await adminRequest(request(admin,null,'GET'),{store,gameStore});
  assert.ok(response.body.accounts.every(a=>!('hash' in a)&&!('salt' in a)&&!('password' in a)));
+});
+
+test('automatic absence tolerates short reconnects, fills only unevaluated goals, and GymRats validates exercise',async()=>{
+ const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
+ await store.setJSON('active-room',{id:'absence-test',phase:'goals',administratorId:'alexandre-neto',members:['ana','bruno'],current:0,votes:{best:{},worst:{}},results:{},goalResults:{ana:{familia:'done'}}});
+ await store.setJSON('presence/absence-test/ana',{seen:Date.now()-30000});
+ const call=(body)=>roomRequest(request(admin,body,body?'POST':'GET'),{store,gameStore});
+ assert.equal((await call()).body.room.goalResults.ana.exercicio,undefined);
+ await store.setJSON('presence/absence-test/ana',{seen:Date.now()-61000});
+ let room=(await call()).body.room;assert.equal(room.goalResults.ana.familia,'done');assert.equal(room.goalResults.ana.exercicio,'absent');assert.equal(Object.keys(room.goalResults.ana).length,5);
+ await roomRequest(request(ana,null,'GET'),{store,gameStore});
+ await call({action:'mark',roomId:'absence-test',target:'ana',category:'exercicio',result:'done',gymrats:false});assert.equal((await call()).body.room.goalResults.ana.exercicio,'missed');
+ await call({action:'mark',roomId:'absence-test',target:'ana',category:'exercicio',result:'done',gymrats:true});assert.equal((await call()).body.room.goalResults.ana.exercicio,'done');
+ const bad=await call({action:'next-goal',roomId:'absence-test',target:'bruno'});assert.equal(bad.status,409);
+});
+
+test('sheet creates missing active profiles, maps Bruno and admin, refreshes changed responses without resetting scores',async()=>{
+ const {applySheetRows,syncSheetGoals}=await import('../server/melhores-sheet.js');
+ const accounts=[{id:'alexandre-neto',name:'Alexandre Neto'},{id:'bruno',name:'Bruno'}];
+ const rows=[['Data','Nome','Exercício','Família','Alimentação','Hobbies','Conhecimentos'],['today','Alexandre Neto','a','b','c','d','e'],['today','Bruno Melim Zardo','f','g','h','i','j']];
+ const state={participants:[{id:'bruno',name:'Bruno',categories:{familia:7},totalPoints:7}],removedParticipantIds:['alexandre-neto']};
+ applySheetRows(state,rows,accounts);assert.equal(state.sheetSync.matched,2);assert.equal(state.participants.find(p=>p.id==='alexandre-neto').objectives.exercicio,'a');assert.equal(state.participants[0].totalPoints,7);
+ state.participants[0].objectives.exercicio='manual';applySheetRows(state,rows,accounts);assert.equal(state.participants[0].objectives.exercicio,'manual');rows[2][2]='new response';applySheetRows(state,rows,accounts);assert.equal(state.participants[0].objectives.exercicio,'new response');
+ const store=new Store(),gameStore=new Store();let fetches=0;
+ const options={url:'https://docs.google.com/test.csv',fetcher:async()=>{fetches++;return {ok:true,text:async()=>JSON.stringify({values:rows})};}};
+ await syncSheetGoals(gameStore,store,accounts,options);await syncSheetGoals(gameStore,store,accounts,options);assert.equal(fetches,1);assert.equal((await store.get('sheet-sync-status')).ok,true);
 });

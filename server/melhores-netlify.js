@@ -8,7 +8,7 @@ export async function serve(request, handler, methods = ['GET', 'POST']) {
   let response;
   try {
     const raw = request.method === 'POST' ? await request.text() : '';
-    if (raw.length > 100000) response = json({ ok: false, error: 'Pedido muito grande.' }, 413);
+    if (raw.length > 600000) response = json({ ok: false, error: 'Pedido muito grande.' }, 413);
     else {
       const body = raw ? JSON.parse(raw) : {};
       if (!body || typeof body !== 'object' || Array.isArray(body)) return Response.json({ ok: false, error: 'Pedido inválido.' }, { status: 400 });
