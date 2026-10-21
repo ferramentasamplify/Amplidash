@@ -14,7 +14,7 @@ const photo = url => { try { return (new URL(url).protocol === 'https:' || /^dat
 const initials=name=>{const parts=String(name||'').trim().split(/\s+/);return (parts.length>1?parts.slice(0,2).map(n=>n[0]).join(''):parts[0].slice(0,2)).toUpperCase();};
 const avatar=(url,name)=>`<span class="member-portrait">${photo(url)||`<span>${esc(initials(name))}</span>`}</span>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, actionPending = false, saving = Promise.resolve(), adminLoaded = false;
+let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, actionPending = false, saving = Promise.resolve();
 let draftRevision = 0;
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
 let previousRoom=null,actionRevision=0;
@@ -68,9 +68,9 @@ async function shell() {
   root.addEventListener('click', async e => {
     const viewButton=e.target.closest('[data-profile-view]');if(viewButton){
       const view=viewButton.dataset.profileView;changeView(view);
-      if(view==='admin'&&user.role==='admin'&&!adminLoaded){
+      if(view==='admin'&&user.role==='admin'){
         viewButton.disabled=true;
-        try{const {openAdminPanel}=await import('./admin.js');await openAdminPanel(document.getElementById('admin-panel'),api);adminLoaded=true;}
+        try{const {openAdminPanel}=await import('./admin.js');await openAdminPanel(document.getElementById('admin-panel'),api);}
         catch(e){error(e.message);}finally{viewButton.disabled=false;changeView(currentView);}
       }
       return;
@@ -109,9 +109,9 @@ function openingAnimation(){
 }
 function receiveState(nextState){
  const next=nextState.room,finished=r=>r&&['completed','closed'].includes(r.phase);
- const watching=currentView==='room'&&next?.id===previousRoom?.id&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id);
+ const watching=!!next&&!!previousRoom&&currentView==='room'&&next.id===previousRoom.id&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id);
  if(watching&&!finished(previousRoom)&&finished(next))endingRoom=next.id;
- const hosting=currentView==='room'&&next?.id===previousRoom?.id&&next?.administrator?.id===user.id;
+ const hosting=!!next&&!!previousRoom&&currentView==='room'&&next.id===previousRoom.id&&next.administrator?.id===user.id;
  if((watching||hosting)&&previousRoom.phase==='waiting'&&next.phase==='writing')openingAnimation();
  previousRoom=next;state=nextState;offset=state.serverTime-Date.now();
 }
