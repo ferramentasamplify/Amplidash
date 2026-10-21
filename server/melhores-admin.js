@@ -1,7 +1,8 @@
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { sealPassword, openPassword } from './melhores-password-vault.js';
 import { applySheetRows, syncSheetGoals, sheetSource } from './melhores-sheet.js';
 import { getStore } from '@netlify/blobs';
-import { requireAdmin, users, json, update } from './melhores-auth.js';
+import { requireAdmin, authenticate, users, json, update } from './melhores-auth.js';
 const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 export async function adminRequest(request,deps={}){
@@ -11,6 +12,22 @@ export async function adminRequest(request,deps={}){
   const gameStore=deps.gameStore||getStore({name:'melhores-game',consistency:'strong'});
   const body=request.body||{};
   if(request.method==='POST'){
+   if(body.action==='reveal-password'){
+    const signed=await authenticate(request,accountsStore);
+    const list=await users(accountsStore),admin=list.find(a=>a.id===signed.id);
+    const attemptKey='vault-attempts/'+signed.id;
+    const attempt=await update(accountsStore,attemptKey,old=>{const a=old&&old.until>Date.now()?old:{count:0,until:Date.now()+15*60e3};return {...a,count:a.count+1};});
+    if(attempt.count>12)fail('Muitas tentativas. Aguarde 15 minutos.',429);
+    if(typeof body.adminPassword!=='string'||body.adminPassword.length>200)fail('Confirme sua senha de administrador.',403);
+    const actual=scryptSync(body.adminPassword,admin.salt,64),expected=Buffer.from(admin.hash,'hex');
+    if(actual.length!==expected.length||!timingSafeEqual(actual,expected))fail('Senha do administrador incorreta.',403);
+    const target=list.find(a=>a.id===body.id);if(!target)fail('Conta não encontrada.',404);
+    let password;try{password=openPassword(target);}catch{fail('A senha mudou fora do cofre ou o cofre está indisponível.',409);}
+    if(password===null)fail('Senha ainda não registrada no cofre. Ela será registrada na próxima troca.',409);
+    await update(accountsStore,'password-vault-audit',old=>[...(old||[]),{adminId:signed.id,targetId:target.id,at:new Date().toISOString()}].slice(-500));
+    await accountsStore.delete(attemptKey);
+    return json({ok:true,password});
+   }
    if(body.action==='save-access'){
     if(typeof body.username!=='string'||!/^[a-z0-9][a-z0-9._-]{0,79}$/.test(body.username))fail('Login inválido: use letras minúsculas, números, ponto, hífen ou sublinhado.');
     if(typeof body.name!=='string'||!body.name.trim()||body.name.length>100)fail('Nome inválido.');
@@ -22,7 +39,8 @@ export async function adminRequest(request,deps={}){
      const a=list.find(a=>a.id===body.id);if(!a)fail('Login não encontrado.',404);
      if(list.some(other=>other.id!==a.id&&other.username===body.username))fail('Este login já está em uso.',409);
      a.username=body.username;a.name=body.name.trim();
-     if(hash){a.salt=salt;a.hash=hash;a.sessionVersion=randomBytes(16).toString('hex');}
+     if(hash){a.salt=salt;a.hash=hash;a.passwordVault=sealPassword(body.password,a);a.sessionVersion=randomBytes(16).toString('hex');a.passwordUpdatedAt=new Date().toISOString();}
+     a.accessUpdatedAt=new Date().toISOString();a.accessUpdatedBy='alexandre-neto';
      return list;
     });
     await update(gameStore,'game-state',state=>{if(state){const p=state.participants?.find(p=>p.id===body.id);if(p)p.name=body.name.trim();}return state;});

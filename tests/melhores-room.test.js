@@ -18,6 +18,7 @@ class Store {
   async delete(key) {this.records.delete(key);}
 }
 const configs=['alexandre-neto','ana','bruno'].map(id=>({id,name:id,username:id,salt:'salt-for-test-'+id,hash:scryptSync('test-password', 'salt-for-test-'+id,64).toString('hex'),role:'admin'}));
+process.env.MELHORES_PASSWORD_VAULT_KEY='ab'.repeat(32);
 process.env.MELHORES_USERS_JSON=JSON.stringify(configs);
 const headers={host:'localhost:3000',origin:'http://localhost:3000'};
 const request=(cookie,body,method='POST')=>({method,headers:{...headers,cookie},body});
@@ -313,4 +314,31 @@ test('appearance is validated and stored only for the authenticated account',asy
  assert.equal((await authRequest(request(bruno,null,'GET'),store)).body.user.appearance,null);
  const again=await login(store,'ana');
  assert.deepEqual((await authRequest(request(again,null,'GET'),store)).body.user.appearance,appearance);
+});
+
+test('password vault follows self-service changes, rejects participants and incorrect admin password, and binds ciphertext to account/hash',async()=>{
+ const {adminRequest}=await import('../server/melhores-admin.js');
+ const {openPassword}=await import('../server/melhores-password-vault.js');
+ const store=new Store(),gameStore=new Store();
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const result=await authRequest(request(ana,{action:'self-access',username:'ana',currentPassword:'test-password',password:'new-vault-password'}),store);
+ assert.equal(result.status,200);
+ const account=(await store.get('accounts')).find(a=>a.id==='ana');
+ assert.equal(openPassword(account),'new-vault-password');
+ assert.ok(!JSON.stringify(account.passwordVault).includes('new-vault-password'));
+ assert.throws(()=>openPassword({...account,id:'bruno'}));
+ assert.throws(()=>openPassword({...account,hash:'00'.repeat(64)}));
+ const newLogin=await authRequest(request('',{username:'ana',password:'new-vault-password'}),store);
+ const participant=newLogin.headers['Set-Cookie'].split(';')[0];
+ const call=(cookie,body)=>adminRequest(request(cookie,body),{store,gameStore});
+ assert.equal((await call(participant,{action:'reveal-password',id:'ana',adminPassword:'test-password'})).status,403);
+ assert.equal((await call(admin,{action:'reveal-password',id:'ana',adminPassword:'incorrect'})).status,403);
+ const revealed=await call(admin,{action:'reveal-password',id:'ana',adminPassword:'test-password'});
+ assert.equal(revealed.status,200);assert.equal(revealed.body.password,'new-vault-password');
+ const audit=await store.get('password-vault-audit');assert.equal(audit.length,1);assert.equal(audit[0].targetId,'ana');assert.ok(!JSON.stringify(audit).includes('new-vault-password'));
+ const pub=(await authRequest(request(participant,null,'GET'),store)).body.user;
+ assert.equal(pub.passwordVault,undefined);assert.equal(pub.hash,undefined);
+ const saved=await call(admin,{action:'save-access',id:'ana',name:'Ana',username:'ana',password:'admin-reset-password'});
+ assert.equal(saved.status,200);
+ assert.equal(openPassword((await store.get('accounts')).find(a=>a.id==='ana')),'admin-reset-password');
 });

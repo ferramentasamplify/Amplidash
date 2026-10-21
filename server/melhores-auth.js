@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+import { sealPassword } from './melhores-password-vault.js';
 const COOKIE = 'melhores_session';
 const digest = s => createHash('sha256').update(s).digest('hex');
 export const json = (body, status = 200, extra = {}) => ({ status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra }, body });
@@ -86,7 +87,7 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
         if(!a||a.hash!==prior.hash||a.sessionVersion!==prior.sessionVersion)throw Object.assign(new Error('A conta mudou. Entre novamente.'),{status:409});
         if(list.some(other=>other.id!==a.id&&other.username===username))throw Object.assign(new Error('Este login já está em uso.'),{status:409});
         a.username=username;
-        if(password){a.salt=randomBytes(16).toString('hex');a.hash=scryptSync(password,a.salt,64).toString('hex');}
+        if(password){a.salt=randomBytes(16).toString('hex');a.hash=scryptSync(password,a.salt,64).toString('hex');a.passwordVault=sealPassword(password,a);}
         a.sessionVersion=randomBytes(16).toString('hex');
         a.accessUpdatedAt=new Date().toISOString();a.accessUpdatedBy=signed.id;a.passwordUpdatedAt=password?a.accessUpdatedAt:a.passwordUpdatedAt;
         return list;
