@@ -33,12 +33,17 @@ export async function syncSheetGoals(gameStore,accountsStore,accounts,options={}
  const url=options.url??sheetSource();if(!url)return;
  const parsed=new URL(url);if(parsed.protocol!=='https:'||!['docs.google.com','sheets.googleapis.com'].includes(parsed.hostname))throw Error('Fonte da planilha não permitida.');
  const now=Date.now();let acquired=false;
- const lock=await update(accountsStore,'sheet-sync-lock',old=>{acquired=false;if(old?.until>now)return old;acquired=true;return {until:now+60000};});
- if(!acquired)return;
  try{
+  // A held lease is read-only: every participant poll must not rewrite one hot key.
+  if((await accountsStore.get('sheet-sync-lock',{type:'json'}))?.until>now)return;
+  await update(accountsStore,'sheet-sync-lock',old=>{acquired=false;if(old?.until>now)return old;acquired=true;return {until:now+60000};});
+  if(!acquired)return;
   const response=await (options.fetcher||fetch)(url,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('Planilha sem acesso de leitura.');
   const text=await response.text();if(text.length>2000000)throw Error('Planilha acima do limite.');const rows=sheetRows(text);
   await update(gameStore,'game-state',state=>applySheetRows(state||{participants:[]},rows,accounts));
   await accountsStore.setJSON('sheet-sync-status',{ok:true,checkedAt:new Date().toISOString()});
- }catch(error){await accountsStore.setJSON('sheet-sync-status',{ok:false,checkedAt:new Date().toISOString(),error:'A fonte da planilha está indisponível.'});}
+ }catch(error){
+  // Optional refresh failures must not make the room or cached goals unavailable.
+  try{await accountsStore.setJSON('sheet-sync-status',{ok:false,checkedAt:new Date().toISOString(),error:'A atualização da planilha está indisponível. As metas salvas foram preservadas.'});}catch{console.error('[sheet-sync] Não foi possível registrar o status da atualização.');}
+ }
 }

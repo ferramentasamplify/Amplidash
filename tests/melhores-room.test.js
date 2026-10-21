@@ -374,3 +374,16 @@ test('host participates when starting from game UI and can vote in an already-op
  assert.equal((await call(bruno,{action:'vote',roomId:room.id,target:'ana'})).status,200);
  assert.equal((await store.get('active-room')).results.worst.winner,'ana');
 });
+
+test('sheet refresh lease is read-only while held; sync outages preserve cached room/profile access',async()=>{
+ const {syncSheetGoals}=await import('../server/melhores-sheet.js');
+ const store=new Store(),gameStore=new Store(),cookie=await login(store,'ana');
+ await gameStore.setJSON('game-state',{participants:[{id:'ana',name:'Ana',objectives:{familia:'Meta preservada'}}]});
+ await store.setJSON('sheet-sync-lock',{until:Date.now()+60000});
+ const version=store.version;await syncSheetGoals(gameStore,store,[],{url:'https://docs.google.com/test',fetcher:()=>{throw Error('Não deve baixar durante lease');}});assert.equal(store.version,version);
+ const get=store.get.bind(store);store.get=async(key,...args)=>{if(key==='sheet-sync-lock')throw Error('Lock storage temporarily unavailable');return get(key,...args)};
+ const result=await roomRequest(request(cookie,{},'GET'),{store,gameStore,sheetUrl:'https://docs.google.com/test'});
+ assert.equal(result.status,200);assert.equal(result.body.room,null);assert.equal(result.body.profile.objectives.familia,'Meta preservada');assert.equal((await get('sheet-sync-status')).ok,false);
+ const set=store.setJSON.bind(store);store.setJSON=async(key,...args)=>{if(key==='sheet-sync-status')throw Error('Status temporarily unavailable');return set(key,...args)};
+ assert.equal((await roomRequest(request(cookie,{},'GET'),{store,gameStore,sheetUrl:'https://docs.google.com/test'})).status,200);
+});
