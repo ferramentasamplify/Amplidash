@@ -1,3 +1,4 @@
+import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { authenticate, sameOrigin, users, json, update } from './melhores-auth.js';
@@ -98,14 +99,23 @@ export async function roomRequest(request, deps = {}) {
       }
     } else if (request.method !== 'GET') return json({ ok: false }, 405);
     const room = await store.get('active-room', { type: 'json' });
-    const game = deps.game || await getStore({ name: 'melhores-game', consistency: 'strong' }).get('game-state', { type: 'json' }) || {};
+    let game = deps.game || await getStore({ name: 'melhores-game', consistency: 'strong' }).get('game-state', { type: 'json' }) || {};
     const profile = (game.participants || []).find(p => p.id === user.participantId);
-    if (!room) return json({ ok: true, user, profile: profile ? {name:profile.name,photoUrl:profile.photoUrl,objectives:profile.objectives} : { name: user.name }, room: null, serverTime: Date.now() });
+    if (!room) return json({ ok: true, user, profile:personalProfile(game,user), room: null, serverTime: Date.now() });
     if (room.phase === 'closed' && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
       const gameStore = deps.gameStore || getStore({name:'melhores-game',consistency:'strong'});
-      await update(gameStore,'game-state', gameState => {
+      const winnerFact=async(kind)=>{
+        const accountId=room.results[kind].winner;
+        const account=accounts.find(a=>a.id===accountId);
+        const draft=await store.get(`rooms/${room.id}/${accountId}`,{type:'json'});
+        return {participantId:account?.participantId||accountId,label:account?.name||'',description:draft?.[kind]||''};
+      };
+      const best=await winnerFact('best'),worst=await winnerFact('worst');
+      const savedGame=await update(gameStore,'game-state', gameState => {
         gameState ||= {participants:[]};
         gameState.appliedRooms ||= [];
+        gameState.weeklyFactHistory ||= [];
+        if(!gameState.weeklyFactHistory.some(entry=>entry.id==='room-'+room.id))gameState.weeklyFactHistory.push({id:'room-'+room.id,date:room.closedAt.slice(0,10),best,worst});
         if (gameState.appliedRooms.includes(room.id)) return gameState;
         for (const p of gameState.participants) {
           const memberId = room.members.find(id => (accounts.find(a=>a.id===id)?.participantId||id)===p.id);
@@ -119,6 +129,7 @@ export async function roomRequest(request, deps = {}) {
         }
         gameState.appliedRooms.push(room.id); return gameState;
       });
+      game=savedGame;
     }
     // Heartbeats are room-scoped, never inferred from saved drafts or historical members.
     if (room.members.includes(user.id) && room.phase !== 'closed') await store.setJSON(`presence/${room.id}/${user.id}`, {seen:Date.now()});
@@ -138,7 +149,7 @@ export async function roomRequest(request, deps = {}) {
     const {votes, ...publicRoom} = room;
     const kind = room.phase.endsWith('-best') ? 'best' : 'worst';
     const voting = room.phase.startsWith('voting-');
-    const safeProfile = profile ? {name:profile.name, photoUrl:profile.photoUrl, objectives:profile.objectives} : {name:user.name};
+    const safeProfile = personalProfile(game,user);
     return json({ ok: true, user, profile:safeProfile, room: { ...publicRoom, members: rows,
       ...(voting ? {voted:!!votes?.[kind]?.[user.id], voteCount:Object.keys(votes?.[kind]||{}).length} : {}) }, serverTime: Date.now() });
   } catch (e) { console.error('[room]', e.message); return json({ ok: false, error: e.status ? e.message : 'Não foi possível acessar a sala. Tente novamente.' }, e.status || 503); }

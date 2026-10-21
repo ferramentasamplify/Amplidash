@@ -4,6 +4,23 @@ const photo = url => { try { return new URL(url).protocol === 'https:' ? `<img c
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, saving = Promise.resolve(), adminLoaded = false;
 let draftRevision = 0;
+let currentView='profile',profileLayout='';
+function changeView(view){
+ currentView=view;document.getElementById('room-profile').hidden=view!=='profile';document.getElementById('room-content').hidden=view!=='room';
+ document.querySelectorAll('[data-profile-view]').forEach(b=>{b.classList.toggle('active',b.dataset.profileView===view);b.setAttribute('aria-pressed',String(b.dataset.profileView===view));});
+}
+function renderProfile(){
+ const profile=state.profile||{},room=state.room;
+ const key=JSON.stringify([profile,room?.id,room?.phase]);if(key===profileLayout)return;profileLayout=key;
+ const initials=(profile.name||user.name).split(/\s+/).slice(0,2).map(n=>n[0]).join('');
+ const goals=[['exercicio','💪','Exercício físico'],['familia','👨‍👩‍👧‍👦','Família'],['alimentacao','🥗','Alimentação'],['hobbies','🎨','Hobbies'],['conhecimentos','📚','Conhecimentos']];
+ const achievements=profile.achievements||[],best=achievements.filter(a=>a.kind==='best'),worst=achievements.filter(a=>a.kind==='worst');
+ const date=value=>{if(!value)return 'Data não registrada';const d=new Date(value.slice(0,10)+'T12:00:00Z');return Number.isNaN(d.valueOf())?'Data não registrada':d.toLocaleDateString('pt-BR',{timeZone:'UTC'});};
+ const stories=entries=>entries.map(a=>`<article class="profile-win"><span class="profile-win-icon" aria-hidden="true">${a.kind==='best'?'🏆':'🌧️'}</span><div><p class="profile-win-date">${esc(date(a.date))}</p><h3>${a.kind==='best'?'Meu melhor da semana':'Meu pior da semana'}</h3><p class="profile-win-story">${esc(a.description||'O relato desta conquista não foi registrado no histórico.')}</p></div></article>`).join('');
+ const live=room&&room.phase!=='closed';
+ document.getElementById('room-profile').innerHTML=`<section class="profile-hero room-card"><div class="profile-cover"><span aria-hidden="true">✦</span><span>UMA SEMANA DE CADA VEZ</span><span aria-hidden="true">✧</span></div><div class="profile-identity"><div class="profile-portrait">${photo(profile.photoUrl)||`<span aria-label="Iniciais de ${esc(profile.name||user.name)}">${esc(initials)}</span>`}</div><div><p class="room-eyebrow">MEU CANTINHO NA AMPLIFY</p><h1>${esc(profile.name||user.name)}</h1><p>Minhas metas, minhas histórias e os momentos que fizeram a semana. ✨</p></div></div><div class="profile-stats"><div><strong>🏆 ${Number(profile.bestWins)||0}</strong><span>melhor da semana</span></div><div><strong>🎯 ${goals.filter(([k])=>String(profile.objectives?.[k]||'').trim()).length}/5</strong><span>metas definidas</span></div><div><strong>🌱 Toda semana</strong><span>uma nova chance</span></div></div></section><section class="profile-room-invite room-card"><div><p class="room-eyebrow">${live?'🟢 ENCONTRO ABERTO':'💬 NOSSO ENCONTRO'}</p><h2>${live?'A sala da semana está aberta!':'Sextou? Bora compartilhar.'}</h2><p>${live?'Veja em que etapa estamos e participe com o seu perfil.':'Quando a sala abrir, você entra por aqui. Suas metas já vão com você.'}</p></div><button data-profile-view="room">${live?'Ir para a sala →':'Ver sala da semana →'}</button></section><section class="profile-goals"><div class="profile-section-title"><h2>🎯 Minhas metas</h2><p>Pequenos passos. Uma semana com mais intenção.</p></div><div class="profile-goal-grid">${goals.map(([k,emoji,label])=>`<article class="profile-goal profile-goal-${k}"><span class="profile-goal-emoji" aria-hidden="true">${emoji}</span><h3>${label}</h3><p>${esc(profile.objectives?.[k]||'Sua meta ainda não foi definida. Combine com o administrador. 🌱')}</p></article>`).join('')}</div></section><section class="room-card profile-achievements"><p class="room-eyebrow">MEUS MOMENTOS DE DESTAQUE</p><h2>🏆 Meu mural de conquistas</h2><p>Cada vitória tem uma história. Essas são as minhas.</p>${best.length?stories(best):'<div class="profile-empty"><span aria-hidden="true">✨</span><h3>Seu próximo grande momento vem aí</h3><p>Quando você ganhar o melhor da semana, a data e o relato vão aparecer aqui.</p></div>'}${Number(profile.bestWins)>best.length?'<p>Você também tem conquistas anteriores sem relato disponível no histórico.</p>':''}${worst.length?`<details class="profile-challenges"><summary>🌧️ Histórias que a gente também compartilhou · ${worst.length}</summary><p>Os desafios fazem parte da caminhada.</p>${stories(worst)}</details>`:''}</section>`;
+}
+
 async function api(endpoint, body) {
   const res = await fetch('/api/melhores/' + endpoint, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers: body ? {'Content-Type':'application/json'} : {}, ...(body ? {body: JSON.stringify(body)} : {}) });
   const data = await res.json();
@@ -22,7 +39,8 @@ function login() {
 }
 async function shell() {
   window.melhoresUser = user;
-  root.innerHTML = `<main class="room-page"><header class="room-header"><div><p class="room-eyebrow">AMPLIFY · BEST OF THE WEEK</p><h1>Olá, ${esc(user.name)}</h1></div><nav>${user.role==='admin'?'<button id="room-admin" class="secondary">Painel adm</button>':''}<button id="room-logout" class="secondary">Sair</button></nav></header><p id="room-error" role="alert"></p><section id="room-content"></section></main>`;
+  currentView=user.role==='admin'?'room':'profile';
+  root.innerHTML = `<main class="room-page"><header class="room-header"><div><p class="room-eyebrow">AMPLIFY · BEST OF THE WEEK</p><p class="profile-brand">Best of the week ✨</p></div><nav>${user.role==='admin'?'<button id="room-admin" class="secondary">Painel adm</button>':''}<button id="room-logout" class="secondary">Sair</button></nav></header><p id="room-error" role="alert"></p><nav class="profile-tabs" aria-label="Minha área"><button data-profile-view="profile">👤 Meu perfil</button><button data-profile-view="room">💬 Sala da semana</button></nav><section id="room-profile"></section><section id="room-content"></section></main>`;
   document.getElementById('room-logout').onclick = async () => {
     try { await save(false); await api('auth',{action:'logout'}); for(const k of Object.keys(localStorage)) if(k.startsWith('amplify_melhores')) localStorage.removeItem(k); location.reload(); } catch(e) {error(e.message);}
   };
@@ -37,6 +55,7 @@ async function shell() {
     }catch(e){toggle.textContent='Painel adm';error(e.message);}finally{toggle.disabled=false;}
   };
   root.addEventListener('click', async e => {
+    const viewButton=e.target.closest('[data-profile-view]');if(viewButton){changeView(viewButton.dataset.profileView);return;}
     const b=e.target.closest('[data-room-action]');if(!b)return;
     b.disabled=true;error('');
     try {
@@ -105,6 +124,7 @@ function render(){
   if(roomId&&sessionStorage.getItem('melhores-unsent-'+roomId)&&room?.phase!=='writing'&&!document.getElementById('room-recovery')){
     const box=document.createElement('section');box.id='room-recovery';box.className='room-card';const unsent=JSON.parse(sessionStorage.getItem('melhores-unsent-'+roomId));box.innerHTML='<h2>Texto local não confirmado</h2><p>A escrita foi encerrada antes da confirmação do salvamento. Copie seu relato e avise o administrador.</p><p class="room-story">'+esc(unsent.best)+'\n\n'+esc(unsent.worst)+'</p>';content.append(box);
   }
+  renderProfile();changeView(currentView);
   tick();
 }
 async function save(done){

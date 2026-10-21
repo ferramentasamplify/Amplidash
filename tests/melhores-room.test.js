@@ -163,6 +163,8 @@ test('live votes reject self-votes, hide ballots, require admin tie-break; goals
  assert.equal(scored.participants.find(p=>p.id==='ana').categories.bestWeek,1);
  assert.equal(scored.participants.find(p=>p.id==='bruno').categories.familia,-1);
  assert.equal(scored.participants.find(p=>p.id==='bruno').categories.bestWeek,1);
+ assert.equal(scored.weeklyFactHistory.length,1);assert.equal(scored.weeklyFactHistory[0].best.participantId,'ana');assert.equal(scored.weeklyFactHistory[0].best.description,'Ana best');
+ assert.equal((await call(ana)).body.profile.achievements[0].description,'Ana best');
  await call(admin);assert.deepEqual(await gameStore.get('game-state'),scored);
 });
 
@@ -196,4 +198,12 @@ test('admin directory protects credentials, edits goals with conflicts and revok
  await call(admin,{action:'account-status',id:'ana',disabled:false});
  assert.equal((await authRequest(request(ana,null,'GET'),store)).body.user,null);
  assert.equal((await authRequest(request('',{username:'ana',password:'test-password'}),store)).status,200);
+});
+
+test('personal profile exposes own goals and winning stories only, with no ranking or other users facts',async()=>{
+ const {personalProfile}=await import('../server/melhores-profile.js');
+ const g={participants:[{id:'ana',name:'Ana',photoUrl:'https://example.test/photo.jpg',objectives:{exercicio:'Caminhar'},categories:{exercicio:99},totalPoints:99,scoreBreakdown:{melhorFato:4,piorFato:1}},{id:'bruno',name:'Bruno'}],weeklyFactHistory:[{id:'old',date:'2026-10-09',best:{participantId:'bruno',description:'PRIVATE BRUNO'},worst:{participantId:'bruno',description:'PRIVATE WORST'}},{id:'own',date:'2026-10-16',best:{participantId:'ana',description:'Concluí meu curso'},worst:{participantId:'bruno',description:'PRIVATE AGAIN'}},{id:'own-worst',date:'2026-10-02',best:{participantId:'bruno',description:'PRIVATE'},worst:{participantId:'ana',description:'Perdi o ônibus'}}]};
+ const p=personalProfile(g,{id:'login-ana',participantId:'ana',name:'Alias'});
+ assert.equal(p.name,'Ana');assert.equal(p.bestWins,4);assert.equal(p.worstWins,1);assert.equal(p.achievements.length,2);assert.equal(p.achievements[0].description,'Concluí meu curso');assert.equal(p.categories,undefined);assert.equal(p.totalPoints,undefined);assert.ok(!JSON.stringify(p).includes('PRIVATE'));
+ const empty=personalProfile({}, {id:'new',name:'Novo'});assert.deepEqual(empty.achievements,[]);assert.equal(empty.bestWins,0);assert.equal(empty.name,'Novo');
 });
