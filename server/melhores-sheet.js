@@ -1,9 +1,10 @@
+import { formattedSheetRows } from './melhores-sheet-format.js';
 import { update } from './melhores-auth.js';
-export const SHEET_DATA_URL='https://docs.google.com/spreadsheets/d/1NScAndOyqQkw5CUKqQp9jOEWlj-B1YwgzyvDY-0NYxc/export?format=csv&gid=417247986';
+export const SHEET_DATA_URL='https://docs.google.com/spreadsheets/d/1NScAndOyqQkw5CUKqQp9jOEWlj-B1YwgzyvDY-0NYxc/export?format=xlsx&gid=417247986';
 export const sheetSource=()=>process.env.MELHORES_SHEET_DATA_URL||SHEET_DATA_URL;
 const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-const aliases={camilaandrade:'camila',rhuandavyd:'rhuan',vitorhugobotelhoferreira:'vitor',brunomelimzardo:'bruno',alexandre:'alexandre-neto'};
+const aliases={camilaandrade:'camila',rhuandavyd:'rhuan',vitorhugobotelhoferreira:'vitor',brunomelimzardo:'bruno',alexandre:'alexandre-neto',isaiastemistocles:'isaias'};
 export function sheetRows(text){
  if(text.trim().startsWith('{')){const d=JSON.parse(text);if(!Array.isArray(d.values))throw Error('Planilha sem linhas válidas.');return d.values;}
  const rows=[];let row=[],field='',quoted=false;
@@ -16,16 +17,15 @@ export function applySheetRows(state,rows,accounts,now=new Date().toISOString())
  state.participants||=[];state.removedParticipantIds=(state.removedParticipantIds||[]).filter(id=>!activeIds.has(id));
  for(const a of accounts){const id=a.participantId||a.id;if(!state.participants.some(p=>p.id===id)&&!state.removedParticipantIds?.includes(id))state.participants.push({id,name:a.name,objectives:{},categories:Object.fromEntries([...keys,'bestWeek'].map(k=>[k,0])),scoreBreakdown:{melhorFato:0,piorFato:0},totalPoints:0});}
  for(const p of state.participants)if(activeIds.has(p.id))p.sheetEnrollment={...p.sheetEnrollment,active:false,checkedAt:now};
- // Google Forms appends responses; the latest complete response wins for each person.
+ // The latest response wins, including pending/red cells; never resurrect an older valid goal.
  for(const row of rows.slice(1)){
   if(!row[1]?.trim())continue;const name=norm(row[1]);
   const matched=(state.participants||[]).filter(p=>activeIds.has(p.id)&&(norm(p.name)===name||norm(p.id)===name||accounts.some(a=>(a.participantId||a.id)===p.id&&norm(a.name)===name)||p.id===aliases[name]));
   if(matched.length!==1){report.unmatched.push(String(row[1]).trim());continue;}
-  const p=matched[0],objectives=Object.fromEntries(keys.map((key,i)=>[key,String(row[i+2]||'').trim()]));
-  if(Object.values(objectives).some(v=>!v||v.length>4000))continue;
-  const responseSignature=JSON.stringify(row.slice(0,7));
+  const p=matched[0],objectives=Object.fromEntries(keys.map((key,i)=>{const value=String(row[i+2]||'').trim();return [key,value.length>4000||/^(?:teste|test)+$|^(?:n\/?a|n[aã]o se aplica|[-–—]+)$/i.test(value)?'':value];}));
+  const responseSignature=JSON.stringify([row[0],row[1],...Object.values(objectives)]);
   if(p.sheetEnrollment?.responseSignature!==responseSignature)p.objectives=objectives;
-  p.sheetEnrollment={active:true,checkedAt:now,responseAt:String(row[0]||''),responseSignature};report.matched.push(p.id);
+  p.sheetEnrollment={active:Object.values(objectives).every(Boolean),checkedAt:now,responseAt:String(row[0]||''),responseSignature,invalidCategories:keys.filter(k=>!objectives[k])};report.matched.push(p.id);
  }
  state.sheetSync={lastSuccess:now,matched:[...new Set(report.matched)].length,unmatched:report.unmatched};return state;
 }
@@ -39,7 +39,9 @@ export async function syncSheetGoals(gameStore,accountsStore,accounts,options={}
   await update(accountsStore,'sheet-sync-lock',old=>{acquired=false;if(old?.until>now)return old;acquired=true;return {until:now+60000};});
   if(!acquired)return;
   const response=await (options.fetcher||fetch)(url,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('Planilha sem acesso de leitura.');
-  const text=await response.text();if(text.length>2000000)throw Error('Planilha acima do limite.');const rows=sheetRows(text);
+  let rows;
+  if(parsed.searchParams.get('format')==='xlsx')rows=formattedSheetRows(new Uint8Array(await response.arrayBuffer()));
+  else {const text=await response.text();if(text.length>2000000)throw Error('Planilha acima do limite.');rows=sheetRows(text);}
   await update(gameStore,'game-state',state=>applySheetRows(state||{participants:[]},rows,accounts));
   await accountsStore.setJSON('sheet-sync-status',{ok:true,checkedAt:new Date().toISOString()});
  }catch(error){

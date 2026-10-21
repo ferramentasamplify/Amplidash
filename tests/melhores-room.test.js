@@ -387,3 +387,17 @@ test('sheet refresh lease is read-only while held; sync outages preserve cached 
  const set=store.setJSON.bind(store);store.setJSON=async(key,...args)=>{if(key==='sheet-sync-status')throw Error('Status temporarily unavailable');return set(key,...args)};
  assert.equal((await roomRequest(request(cookie,{},'GET'),{store,gameStore,sheetUrl:'https://docs.google.com/test'})).status,200);
 });
+
+test('formatted sheet sync blanks red cells, accepts newer partial responses and maps Isaías without losing scores',async()=>{
+ const {zipSync,strToU8}=await import('fflate');const{formattedSheetRows}=await import('../server/melhores-sheet-format.js');const{applySheetRows}=await import('../server/melhores-sheet.js');
+ const files={
+ 'xl/workbook.xml':'<workbook xmlns:r="r"><sheets><sheet name="Respostas ao formulário 1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+ 'xl/_rels/workbook.xml.rels':'<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+ 'xl/styles.xml':'<styleSheet><fills><fill><patternFill/></fill><fill><patternFill><fgColor rgb="FFF4CCCC"/></patternFill></fill></fills><cellXfs><xf fillId="0"/><xf fillId="1"/></cellXfs></styleSheet>',
+ 'xl/sharedStrings.xml':'<sst><si><t>Nome</t></si><si><t>Isaias Temistocles</t></si><si><r><t>Meta </t></r><r><t>nova</t></r></si></sst>',
+ 'xl/worksheets/sheet1.xml':'<worksheet><sheetData><row r="1"><c r="B1" t="s"><v>0</v></c></row><row r="2"><c r="A2"><v>1</v></c><c r="B2" t="s"><v>1</v></c><c r="C2" t="s" s="1"><v>2</v></c><c r="D2" t="s"><v>2</v></c><c r="E2" t="inlineStr"><is><t>Teste</t></is></c><c r="F2" t="inlineStr"><is><t>Praticar música</t></is></c><c r="G2" t="inlineStr"><is><t>Ler 20 páginas</t></is></c></row></sheetData></worksheet>'};
+ const rows=formattedSheetRows(zipSync(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,strToU8(v)]))));assert.equal(rows[1][2],'');assert.equal(rows[1][3],'Meta nova');
+ const state={participants:[{id:'isaias',name:'Isaias',photoUrl:'https://example.com/photo.jpg',objectives:{exercicio:'Antiga'},categories:{familia:4},scoreBreakdown:{melhorFato:1},totalPoints:5}],weeklyFactHistory:[{id:'keep'}]};const account=[{id:'isaias',name:'Isaias'}];
+ applySheetRows(state,[rows[0],['0','Isaias','a','b','c','d','e'],rows[1]],account);const p=state.participants[0];assert.equal(p.objectives.exercicio,'');assert.equal(p.objectives.familia,'Meta nova');assert.equal(p.objectives.alimentacao,'');assert.equal(p.sheetEnrollment.active,false);assert.equal(p.categories.familia,4);assert.equal(p.totalPoints,5);assert.equal(state.weeklyFactHistory[0].id,'keep');assert.equal(p.photoUrl,'https://example.com/photo.jpg');
+ const corrected=structuredClone(rows);corrected[1][2]='Treinar 3x';corrected[1][4]='Fruta por dia';applySheetRows(state,corrected,account);assert.equal(p.sheetEnrollment.active,true);assert.equal(p.objectives.exercicio,'Treinar 3x');
+});
