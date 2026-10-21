@@ -342,3 +342,18 @@ test('password vault follows self-service changes, rejects participants and inco
  assert.equal(saved.status,200);
  assert.equal(openPassword((await store.get('accounts')).find(a=>a.id==='ana')),'admin-reset-password');
 });
+
+test('session host can join during writing without resetting timer; late participants remain blocked',async()=>{
+ const store=new Store(),gameStore=new Store();
+ await store.setJSON('accounts',configs);await gameStore.setJSON('game-state',game);
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body),{store,gameStore});
+ await call(admin,{action:'create'});const room=await store.get('active-room');
+ await call(ana,{action:'join',roomId:room.id});await call(admin,{action:'start',roomId:room.id});
+ const deadline=(await store.get('active-room')).deadline;
+ assert.equal((await call(bruno,{action:'join',roomId:room.id})).status,409);
+ assert.equal((await call(admin,{action:'join',roomId:room.id})).status,200);
+ assert.equal((await store.get('active-room')).deadline,deadline);
+ assert.equal((await call(admin,{action:'save',roomId:room.id,best:'Meu melhor',worst:'Meu pior',done:true,revision:Date.now()})).status,200);
+ assert.equal((await store.get('active-room')).members.filter(id=>id==='alexandre-neto').length,1);
+});

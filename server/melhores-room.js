@@ -45,7 +45,8 @@ export async function roomRequest(request, deps = {}) {
             if (room.administratorId !== user.id) fail('Somente o administrador desta sessão pode conduzir a reunião.', 403);
           }
           if (action === 'join') {
-            if (room.phase !== 'waiting' && !room.members.includes(user.id)) fail('A rodada já começou. Aguarde a próxima sala.', 409);
+            const hostJoiningWriting = room.phase === 'writing' && user.role === 'admin' && room.administratorId === user.id;
+            if (room.phase !== 'waiting' && !hostJoiningWriting && !room.members.includes(user.id)) fail('A rodada já começou. Aguarde a próxima sala.', 409);
             if (!room.members.includes(user.id)) room.members.push(user.id);
           } else if (action === 'start') {
             if (room.phase !== 'waiting' || !room.members.length) fail('A sala precisa de participantes e deve estar aguardando.', 409);
