@@ -626,14 +626,7 @@ export async function resetAllScores() {
       conhecimentos: 0,
       bestWeek: 0,
     },
-    objectives: {
-      exercicio: '',
-      familia: '',
-      alimentacao: '',
-      hobbies: '',
-      conhecimentos: '',
-    },
-    objectiveModeration: createEmptyObjectiveModeration(),
+    // Reset rankings only; profile details, goals and moderation stay intact.
     scoreBreakdown: {
       melhorFato: 0,
       piorFato: 0,
