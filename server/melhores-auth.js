@@ -38,10 +38,11 @@ export async function requireAdmin(request, store) {
 }
 // Compare-and-set protects login counters and the room against overlapping requests.
 export async function update(store, key, transform) {
-  for (let n = 0; n < 8; n++) {
+  for (let n = 0; n < 32; n++) {
     const old = await store.getWithMetadata(key, { type: 'json' });
     const value = transform(old?.data ?? null);
-    const result = await store.setJSON(key, value, old?.etag ? { onlyIfMatch: old.etag } : { onlyIfNew: true });
+    const result = await store.set(key, JSON.stringify(value), old?.etag ? { onlyIfMatch: old.etag } : { onlyIfNew: true });
+    if (result.modified && !result.etag) throw new Error('O armazenamento não confirmou a atualização.');
     if (result.modified) return value;
   }
   throw Object.assign(new Error('Há outra atualização em andamento. Tente novamente.'), { status: 409 });

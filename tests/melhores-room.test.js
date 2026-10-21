@@ -12,8 +12,9 @@ class Store {
   async setJSON(key, data, options={}) {
     const old=this.records.get(key);
     if ((options.onlyIfNew && old) || (options.onlyIfMatch && options.onlyIfMatch!==old?.etag)) return {modified:false};
-    this.records.set(key,{data:structuredClone(data),etag:String(++this.version)});return {modified:true};
+    this.records.set(key,{data:structuredClone(data),etag:String(++this.version)});return {modified:true,etag:String(this.version)};
   }
+  async set(key, value, options={}) { return this.setJSON(key,JSON.parse(value),options); }
   async delete(key) {this.records.delete(key);}
 }
 const configs=['alexandre-neto','ana','bruno'].map(id=>({id,name:id,username:id,salt:'salt-for-test-'+id,hash:scryptSync('test-password', 'salt-for-test-'+id,64).toString('hex'),role:'admin'}));
@@ -105,4 +106,22 @@ test('native Netlify adapter forwards cookies and rejects bad JSON, huge payload
  assert.equal((await invoke(new Request('https://example.com/api',{method:'DELETE'}))).status,405);
  const state=await import('../netlify/functions/melhores-state.js');assert.equal((await state.default(new Request('https://example.com/api/melhores/state'))).status,401);
  const reset=await import('../netlify/functions/melhores-reset.js');assert.equal((await reset.default(new Request('https://example.com/api/melhores/reset'))).status,405);
+});
+
+test('actual installed Netlify SDK sends conditional headers and retries concurrent updates without lost members', async()=>{
+ const {getStore}=await import('@netlify/blobs');const {update}=await import('../server/melhores-auth.js');
+ let data=null,version=0;const seen=[];
+ const store=getStore({name:'transport-test',siteID:'test-site',token:'test-token',edgeURL:'https://blobs.example.test',uncachedEdgeURL:'https://blobs.example.test',consistency:'strong',fetch:async(url,options)=>{
+  if(options.method==='get')return new Response(data===null?null:JSON.stringify(data),{status:data===null?404:200,headers:data===null?{}:{etag:'"'+version+'"'}});
+  if(options.method==='put'){
+   const h=new Headers(options.headers);seen.push({match:h.get('if-match'),fresh:h.get('if-none-match')});
+   if((h.get('if-none-match')==='*'&&data!==null)||(h.get('if-match')&&h.get('if-match')!=='"'+version+'"'))return new Response(null,{status:412});
+   data=JSON.parse(options.body);version++;return new Response(null,{status:200,headers:{etag:'"'+version+'"'}});
+  }
+  throw new Error('Unexpected method');
+ }});
+ await update(store,'room',()=>({members:[]}));
+ const ids=Array.from({length:22},(_,i)=>'person-'+i);
+ await Promise.all(ids.map(id=>update(store,'room',old=>({members:[...old.members,id]}))));
+ assert.deepEqual(data.members.slice().sort(),ids.slice().sort());assert.equal(seen[0].fresh,'*');assert.ok(seen.slice(1).every(h=>h.match));
 });
