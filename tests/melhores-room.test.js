@@ -207,3 +207,26 @@ test('personal profile exposes own goals and winning stories only, with no ranki
  assert.equal(p.name,'Ana');assert.equal(p.bestWins,4);assert.equal(p.worstWins,1);assert.equal(p.achievements.length,2);assert.equal(p.achievements[0].description,'Concluí meu curso');assert.equal(p.categories,undefined);assert.equal(p.totalPoints,undefined);assert.ok(!JSON.stringify(p).includes('PRIVATE'));
  const empty=personalProfile({}, {id:'new',name:'Novo'});assert.deepEqual(empty.achievements,[]);assert.equal(empty.bestWins,0);assert.equal(empty.name,'Novo');
 });
+
+test('delete permanently revokes login, hides directory profile and prevents old imports restoring it',async()=>{
+ const {adminRequest}=await import('../server/melhores-admin.js');const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const call=(cookie,body)=>adminRequest(request(cookie,body,body?'POST':'GET'),{store,gameStore});
+ assert.equal((await call(ana,{action:'delete-account',id:'bruno'})).status,403);
+ assert.equal((await call(admin,{action:'delete-account',id:'alexandre-neto'})).status,400);
+ const r=await call(admin,{action:'delete-account',id:'ana'});assert.equal(r.status,200);assert.ok(!r.body.accounts.some(a=>a.id==='ana'));assert.ok(!r.body.participants.some(p=>p.id==='ana'));
+ assert.equal((await authRequest(request(ana,null,'GET'),store)).body.user,null);
+ assert.ok((await gameStore.get('game-state')).participants.some(p=>p.id==='ana'));
+ assert.ok((await store.get('deleted-accounts')).includes('ana'));
+ const incoming={id:'ana',username:'ana',name:'Ana',salt:'aa'.repeat(16),hash:'bb'.repeat(64)};
+ await authRequest(request(admin,{action:'import-accounts',accounts:[incoming]}),store);
+ assert.ok(!(await store.get('accounts')).some(a=>a.id==='ana'));
+});
+
+test('sheet sync maps full names safely, activates only complete forms and preserves scores without restoring deleted users',async()=>{
+ const {applySheetRows,sheetRows}=await import('../server/melhores-sheet.js');
+ const g={participants:[{id:'camila',name:'Camila',categories:{familia:9}},{id:'bruno',name:'Bruno'},{id:'ana-raphaela',name:'Ana Raphaela'}]};
+ const rows=[['Data','Nome','Exercício','Família','Alimentação','Hobbies','Conhecimentos'],['1','Camila Andrade','a','b','c','d','e'],['2','Bruno','1','2','3','4','5'],['3','Ana Raphaela','x','x','x','x','x'],['4','Pessoa Desconhecida','x','x','x','x','x']];
+ applySheetRows(g,rows,[{id:'camila'},{id:'bruno'}],'now');assert.equal(g.participants[0].sheetEnrollment.active,true);assert.equal(g.participants[1].sheetEnrollment.active,true);assert.equal(g.participants[0].categories.familia,9);assert.equal(g.participants[2].objectives,undefined);assert.deepEqual(g.sheetSync.unmatched,['Ana Raphaela','Pessoa Desconhecida']);
+ assert.deepEqual(sheetRows('Data,Nome,Meta\r\n1,Bruno,"Ler, aprender\npraticar"'),[['Data','Nome','Meta'],['1','Bruno','Ler, aprender\npraticar']]);
+ assert.throws(()=>applySheetRows(g,[['HTML']],[]));
+});

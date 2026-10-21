@@ -7,7 +7,8 @@ export async function users(store) {
   const saved = store ? await store.get('accounts', { type: 'json' }) : null;
   const list = saved || JSON.parse(process.env.MELHORES_USERS_JSON || '[]');
   if (!Array.isArray(list) || !list.length) throw new Error('Contas não configuradas no servidor.');
-  return list.map(u => ({ ...u, role: u.id === 'alexandre-neto' ? 'admin' : 'participant' }));
+  const deleted=store?await store.get('deleted-accounts',{type:'json'}):[];
+  return list.filter(u=>!(deleted||[]).includes(u.id)).map(u => ({ ...u, role: u.id === 'alexandre-neto' ? 'admin' : 'participant' }));
 }
 export function publicUser(u) { return { id: u.id, name: u.name, username: u.username, role: u.role, participantId:u.participantId||u.id }; }
 export function sameOrigin(request) {
@@ -66,11 +67,12 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
       const incoming = body.accounts;
       if (!Array.isArray(incoming) || incoming.length > 150 || incoming.some(u => !/^[a-z0-9-]{1,80}$/.test(u.id) || u.username !== u.id || typeof u.name !== 'string' || u.name.length > 100 || !/^[a-f0-9]{32}$/.test(u.salt) || !/^[a-f0-9]{128}$/.test(u.hash))) return json({ ok: false, error: 'Formato de contas inválido.' }, 400);
       if (new Set(incoming.map(u=>u.id)).size !== incoming.length) return json({ ok: false, error: 'Contas duplicadas.' }, 400);
+      const deleted=await store.get('deleted-accounts',{type:'json'})||[];
       await update(store, 'accounts', current => {
         const prior = current || JSON.parse(process.env.MELHORES_USERS_JSON || '[]');
         const ids = new Set(prior.map(u=>u.id));
         // Never replace an existing account/password. The bootstrap admin must remain unchanged.
-        return [...prior, ...incoming.filter(u=>!ids.has(u.id))];
+        return [...prior, ...incoming.filter(u=>!ids.has(u.id)&&!deleted.includes(u.id))];
       });
       return json({ ok: true, count: (await users(store)).length });
     }

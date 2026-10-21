@@ -1,3 +1,4 @@
+import { applySheetRows, syncSheetGoals } from './melhores-sheet.js';
 import { getStore } from '@netlify/blobs';
 import { requireAdmin, users, json, update } from './melhores-auth.js';
 const keys=['exercicio','familia','alimentacao','hobbies','conhecimentos'];
@@ -9,7 +10,12 @@ export async function adminRequest(request,deps={}){
   const gameStore=deps.gameStore||getStore({name:'melhores-game',consistency:'strong'});
   const body=request.body||{};
   if(request.method==='POST'){
-   if(body.action==='account-status'){
+   if(body.action==='delete-account'){
+    if(body.id==='alexandre-neto')fail('O administrador não pode ser excluído.');
+    const account=(await users(accountsStore)).find(a=>a.id===body.id);if(!account)fail('Login não encontrado.',404);
+    await update(accountsStore,'deleted-accounts',old=>[...new Set([...(old||[]),body.id])]);
+    await update(accountsStore,'accounts',list=>(list||JSON.parse(process.env.MELHORES_USERS_JSON||'[]')).filter(a=>a.id!==body.id));
+   }else if(body.action==='account-status'){
     await update(accountsStore,'accounts',existing=>{
      const list=existing||JSON.parse(process.env.MELHORES_USERS_JSON||'[]');
      const account=list.find(a=>a.id===body.id);if(!account)fail('Login não encontrado.',404);
@@ -21,6 +27,10 @@ export async function adminRequest(request,deps={}){
      }
      return list;
     });
+   }else if(body.action==='import-sheet'){
+    if(!Array.isArray(body.rows)||body.rows.length>2000)fail('Linhas inválidas.');
+    const accounts=await users(accountsStore);
+    await update(gameStore,'game-state',state=>applySheetRows(state||{participants:[]},body.rows,accounts));
    }else if(body.action==='save-profile'){
     if(typeof body.name!=='string'||!body.name.trim()||body.name.length>100)fail('Informe um nome válido.');
     if(!body.objectives||keys.some(k=>typeof body.objectives[k]!=='string'||body.objectives[k].length>4000))fail('Informe as cinco metas (até 4.000 caracteres cada).');
@@ -40,8 +50,9 @@ export async function adminRequest(request,deps={}){
     });
    }else fail('Ação inválida.');
   }else if(request.method!=='GET')return json({ok:false},405);
+  await syncSheetGoals(gameStore,accountsStore,await users(accountsStore));
   const game=await gameStore.get('game-state',{type:'json'})||{participants:[]};
   const accounts=await users(accountsStore);
-  return json({ok:true,accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:game.participants||[],history:game.weeklyFactHistory||[]});
+  return json({ok:true,sheetSync:{configured:!!process.env.MELHORES_SHEET_DATA_URL,formUrl:process.env.MELHORES_GOALS_FORM_URL||null,lastSuccess:game.sheetSync?.lastSuccess||null},accounts:accounts.map(a=>({id:a.id,username:a.username,name:a.name,role:a.role,disabled:a.disabled===true,participantId:a.participantId||a.id})),participants:(game.participants||[]).filter(p=>accounts.some(a=>(a.participantId||a.id)===p.id)),history:game.weeklyFactHistory||[]});
  }catch(e){return json({ok:false,error:e.status?e.message:'Não foi possível gerenciar os usuários.'},e.status||503);}
 }

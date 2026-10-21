@@ -1,3 +1,4 @@
+import { syncSheetGoals } from './melhores-sheet.js';
 import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
@@ -99,7 +100,9 @@ export async function roomRequest(request, deps = {}) {
       }
     } else if (request.method !== 'GET') return json({ ok: false }, 405);
     const room = await store.get('active-room', { type: 'json' });
-    let game = deps.game || await getStore({ name: 'melhores-game', consistency: 'strong' }).get('game-state', { type: 'json' }) || {};
+    const profileStore=deps.gameStore||(!deps.game?getStore({name:'melhores-game',consistency:'strong'}):null);
+    if(profileStore)await syncSheetGoals(profileStore,store,accounts);
+    let game = deps.game || await profileStore.get('game-state',{type:'json'}) || {};
     const profile = (game.participants || []).find(p => p.id === user.participantId);
     if (!room) return json({ ok: true, user, profile:personalProfile(game,user), room: null, serverTime: Date.now() });
     if (room.phase === 'closed' && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
