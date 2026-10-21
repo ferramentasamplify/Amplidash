@@ -62,7 +62,8 @@ test('full multiplayer flow: concurrent joins and saves, privacy, deadline zero,
  await call(admin,{action:'present',roomId});
  const presentation=await call(bruno,null);assert.equal(presentation.body.room.members[0].draft.best,'still editing');
  assert.equal((await call(ana,{action:'save',roomId,best:'too late',worst:'x',revision:3})).status,409);
- await call(admin,{action:'next',roomId});
+ assert.equal((await call(admin,{action:'next',roomId})).status,409);
+ await call(admin,{action:'show-worst',roomId});await call(admin,{action:'next',roomId});
  assert.equal((await call(ana,null)).body.room.members.find(m=>m.id==='bruno').draft.best,'bruno best');
  await call(admin,{action:'close',roomId});
  assert.equal((await store.get('room-history/'+roomId)).phase,'closed');
@@ -138,7 +139,7 @@ test('live votes reject self-votes, hide ballots, require admin tie-break; goals
  await act(admin,'start');
  for(const [cookie,name] of [[admin,'Alexandre'],[ana,'Ana'],[bruno,'Bruno']])await act(cookie,'save',{best:name+' best',worst:name+' worst',revision:1,done:true});
  await act(admin,'present');assert.equal((await act(admin,'vote-best')).status,409);
- await act(admin,'next');await act(admin,'next');await act(admin,'vote-best');
+ await act(admin,'show-worst');await act(admin,'next');await act(admin,'show-worst');await act(admin,'next');await act(admin,'show-worst');await act(admin,'vote-best');
  assert.equal((await act(ana,'vote',{target:'ana'})).status,400);
  assert.equal((await act(admin,'vote',{target:'alexandre-neto'})).status,400);
  await act(admin,'vote',{target:'ana'});await act(ana,'vote',{target:'bruno'});
@@ -278,4 +279,12 @@ test('sheet creates missing active profiles, maps Bruno and admin, refreshes cha
  const store=new Store(),gameStore=new Store();let fetches=0;
  const options={url:'https://docs.google.com/test.csv',fetcher:async()=>{fetches++;return {ok:true,text:async()=>JSON.stringify({values:rows})};}};
  await syncSheetGoals(gameStore,store,accounts,options);await syncSheetGoals(gameStore,store,accounts,options);assert.equal(fetches,1);assert.equal((await store.get('sheet-sync-status')).ok,true);
+});
+
+test('finished room can be replaced without losing its archive; active room still blocks replacement',async()=>{
+ const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));const admin=await login(store,'alexandre-neto');
+ const call=body=>roomRequest(request(admin,body),{store,gameStore});
+ const old={id:'finished-session',phase:'completed',administratorId:'alexandre-neto',members:[],results:{},votes:{best:{},worst:{}},goalResults:{},completedAt:new Date().toISOString()};await store.setJSON('active-room',old);
+ const created=await call({action:'create'});assert.equal(created.status,200);assert.equal(created.body.room.phase,'waiting');assert.notEqual(created.body.room.id,old.id);assert.deepEqual(await store.get('room-history/'+old.id),old);
+ assert.equal((await call({action:'create'})).status,409);
 });

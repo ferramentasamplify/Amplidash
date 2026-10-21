@@ -3,7 +3,7 @@ import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { authenticate, sameOrigin, users, json, update } from './melhores-auth.js';
-const adminActions = ['start','extend','present','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'];
+const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'];
 const categories = ['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 export async function roomRequest(request, deps = {}) {
@@ -16,10 +16,12 @@ export async function roomRequest(request, deps = {}) {
     const body = request.body || {};
     if (request.method === 'POST') {
       const { action } = body;
-      if (['create','start','extend','present','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
+      if (['create','start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
       if (action === 'create') {
+        const prior=await store.get('active-room',{type:'json'});
+        if(prior?.phase==='completed')await store.setJSON('room-history/'+prior.id,prior);
         await update(store, 'active-room', old => {
-          if (old && old.phase !== 'closed') fail('Encerre a sala atual antes de criar outra.', 409);
+          if (old && !['closed','completed'].includes(old.phase)) fail('Encerre a sala atual antes de criar outra.', 409);
           return { id: randomBytes(8).toString('hex'), phase: 'waiting', createdAt: new Date().toISOString(), administratorId: user.id, members: [], deadline: null, current: 0, votes: { best: {}, worst: {} }, results: {}, goalResults: {} };
         });
       } else if (action === 'save') {
@@ -54,13 +56,17 @@ export async function roomRequest(request, deps = {}) {
             room.deadline = Math.max(Date.now(), room.deadline) + body.seconds * 1000;
           } else if (action === 'present') {
             if (room.phase !== 'writing') fail('A escrita ainda não começou.', 409);
-            room.phase = 'presenting'; room.current = 0;
+            room.phase = 'presenting'; room.current = 0; room.presentationFact='best';
+          } else if (action === 'show-worst') {
+            if(room.phase!=='presenting')fail('A apresentação não começou.',409);
+            room.presentationFact='worst';
           } else if (action === 'next') {
             if (room.phase !== 'presenting') fail('A apresentação não começou.', 409);
-            room.current = Math.min(room.current + 1, room.members.length - 1);
+            if(room.presentationFact!=='worst')fail('Apresente o pior fato antes de avançar.',409);
+            room.current = Math.min(room.current + 1, room.members.length - 1);room.presentationFact='best';
           } else if (action === 'vote-best' || action === 'vote-worst') {
             const kind = action === 'vote-best' ? 'best' : 'worst';
-            if (kind === 'best' ? room.phase !== 'presenting' || room.current !== room.members.length-1 : room.phase !== 'result-best') fail('Conclua a etapa anterior.',409);
+            if (kind === 'best' ? room.phase !== 'presenting' || room.current !== room.members.length-1 || room.presentationFact!=='worst' : room.phase !== 'result-best') fail('Conclua a etapa anterior.',409);
             const eligible = room.members.filter(id => presence[id]?.seen > Date.now()-20000);
             if (eligible.length < 2) fail('São necessárias pelo menos duas pessoas conectadas para votar.',409);
             room.votes ||= {best:{},worst:{}}; room.results ||= {};
