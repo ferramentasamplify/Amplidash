@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync } from 'node:crypto';
 import { applySheetRows, syncSheetGoals } from './melhores-sheet.js';
 import { getStore } from '@netlify/blobs';
 import { requireAdmin, users, json, update } from './melhores-auth.js';
@@ -10,7 +11,21 @@ export async function adminRequest(request,deps={}){
   const gameStore=deps.gameStore||getStore({name:'melhores-game',consistency:'strong'});
   const body=request.body||{};
   if(request.method==='POST'){
-   if(body.action==='delete-account'){
+   if(body.action==='save-access'){
+    if(typeof body.username!=='string'||!/^[a-z0-9][a-z0-9._-]{0,79}$/.test(body.username))fail('Login inválido: use letras minúsculas, números, ponto, hífen ou sublinhado.');
+    if(typeof body.name!=='string'||!body.name.trim()||body.name.length>100)fail('Nome inválido.');
+    if(body.password!==undefined&&(typeof body.password!=='string'||body.password.length<8||body.password.length>200))fail('A nova senha deve ter de 8 a 200 caracteres.');
+    const salt=body.password?randomBytes(16).toString('hex'):null;
+    const hash=salt?scryptSync(body.password,salt,64).toString('hex'):null;
+    await update(accountsStore,'accounts',existing=>{
+     const list=existing||JSON.parse(process.env.MELHORES_USERS_JSON||'[]');
+     const a=list.find(a=>a.id===body.id);if(!a)fail('Login não encontrado.',404);
+     if(list.some(other=>other.id!==a.id&&other.username===body.username))fail('Este login já está em uso.',409);
+     a.username=body.username;a.name=body.name.trim();
+     if(hash){a.salt=salt;a.hash=hash;a.sessionVersion=randomBytes(16).toString('hex');}
+     return list;
+    });
+   }else if(body.action==='delete-account'){
     if(body.id==='alexandre-neto')fail('O administrador não pode ser excluído.');
     const account=(await users(accountsStore)).find(a=>a.id===body.id);if(!account)fail('Login não encontrado.',404);
     await update(accountsStore,'deleted-accounts',old=>[...new Set([...(old||[]),body.id])]);
@@ -34,6 +49,12 @@ export async function adminRequest(request,deps={}){
    }else if(body.action==='save-profile'){
     if(typeof body.name!=='string'||!body.name.trim()||body.name.length>100)fail('Informe um nome válido.');
     if(!body.objectives||keys.some(k=>typeof body.objectives[k]!=='string'||body.objectives[k].length>4000))fail('Informe as cinco metas (até 4.000 caracteres cada).');
+    if(body.photoUrl!==undefined){
+     if(typeof body.photoUrl!=='string'||body.photoUrl.length>500000)fail('Foto muito grande.');
+     if(body.photoUrl&&!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(body.photoUrl)){
+      try{if(new URL(body.photoUrl).protocol!=='https:')fail('Use uma foto ou endereço HTTPS.');}catch{fail('Use uma foto ou endereço HTTPS.');}
+     }
+    }
     const accountList=await users(accountsStore);
     await update(gameStore,'game-state',state=>{
      state||={participants:[],weeklyFactHistory:[],removedParticipantIds:[]};
@@ -44,6 +65,7 @@ export async function adminRequest(request,deps={}){
       p={id:body.id,name:body.name,objectives:{},categories:Object.fromEntries([...keys,'bestWeek'].map(k=>[k,0])),scoreBreakdown:{melhorFato:0,piorFato:0},totalPoints:0};state.participants.push(p);
      }
      if(JSON.stringify(p.objectives||{})!==body.expectedObjectives)fail('As metas mudaram em outra janela. Atualize antes de salvar.',409);
+     if(body.photoUrl!==undefined)p.photoUrl=body.photoUrl;
      p.name=body.name.trim();p.objectives=Object.fromEntries(keys.map(k=>[k,body.objectives[k].trim()]));
      p.objectiveModeration=Object.fromEntries(keys.map(k=>[k,{reporterIds:[],flagged:false}]));
      return state;

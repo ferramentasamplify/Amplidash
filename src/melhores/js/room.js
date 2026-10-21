@@ -1,6 +1,6 @@
 import '../css/room.css';
 const root = document.getElementById('weekly-room');
-const photo = url => { try { return new URL(url).protocol === 'https:' ? `<img class="room-avatar" src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : ''; } catch { return ''; } };
+const photo = url => { try { return (new URL(url).protocol === 'https:' || /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url)) ? `<img class="room-avatar" src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : ''; } catch { return ''; } };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, saving = Promise.resolve(), adminLoaded = false;
 let draftRevision = 0;

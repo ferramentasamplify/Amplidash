@@ -230,3 +230,22 @@ test('sheet sync maps full names safely, activates only complete forms and prese
  assert.deepEqual(sheetRows('Data,Nome,Meta\r\n1,Bruno,"Ler, aprender\npraticar"'),[['Data','Nome','Meta'],['1','Bruno','Ler, aprender\npraticar']]);
  assert.throws(()=>applySheetRows(g,[['HTML']],[]));
 });
+
+
+test('admin can replace portrait and credentials; old sessions revoked and duplicates rejected',async()=>{
+ const {adminRequest}=await import('../server/melhores-admin.js');
+ const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const call=(cookie,body)=>adminRequest(request(cookie,body),{store,gameStore});
+ const objectives=Object.fromEntries(['exercicio','familia','alimentacao','hobbies','conhecimentos'].map(k=>[k,'meta']));
+ const photoUrl='data:image/jpeg;base64,/9j/';
+ assert.equal((await call(ana,{action:'save-access',id:'ana',name:'Ana',username:'changed'})).status,403);
+ assert.equal((await call(admin,{action:'save-profile',id:'ana',name:'Ana',objectives,photoUrl,expectedObjectives:JSON.stringify(game.participants[1].objectives)})).status,200);
+ assert.equal((await gameStore.get('game-state')).participants[1].photoUrl,photoUrl);
+ assert.equal((await call(admin,{action:'save-access',id:'ana',name:'Ana',username:'bruno'})).status,409);
+ assert.equal((await call(admin,{action:'save-access',id:'ana',name:'Ana',username:'ana.nova',password:'new-password-123'})).status,200);
+ assert.equal((await authRequest(request(ana,null,'GET'),store)).body.user,null);
+ assert.equal((await authRequest(request('',{username:'ana.nova',password:'new-password-123'}),store)).status,200);
+ const response=await adminRequest(request(admin,null,'GET'),{store,gameStore});
+ assert.ok(response.body.accounts.every(a=>!('hash' in a)&&!('salt' in a)&&!('password' in a)));
+});
