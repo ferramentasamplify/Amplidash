@@ -6,7 +6,10 @@ let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = fal
 let draftRevision = 0;
 let currentView='profile',profileLayout='';
 function changeView(view){
- currentView=view;document.getElementById('room-profile').hidden=view!=='profile';document.getElementById('room-content').hidden=view!=='room';
+ if(view==='admin'&&user.role!=='admin')return;
+ currentView=view;document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
+ if(view!=='admin')document.getElementById('legacy-panel').hidden=true;
+ document.getElementById('room-profile').hidden=view!=='profile';document.getElementById('room-content').hidden=view!=='room';
  document.querySelectorAll('[data-profile-view]').forEach(b=>{b.classList.toggle('active',b.dataset.profileView===view);b.setAttribute('aria-pressed',String(b.dataset.profileView===view));});
 }
 function renderProfile(){
@@ -40,22 +43,20 @@ function login() {
 async function shell() {
   window.melhoresUser = user;
   currentView=user.role==='admin'?'room':'profile';
-  root.innerHTML = `<main class="room-page"><header class="room-header"><div><p class="room-eyebrow">AMPLIFY · BEST OF THE WEEK</p><p class="profile-brand">Best of the week ✨</p></div><nav>${user.role==='admin'?'<button id="room-admin" class="secondary">Painel adm</button>':''}<button id="room-logout" class="secondary">Sair</button></nav></header><p id="room-error" role="alert"></p><nav class="profile-tabs" aria-label="Minha área"><button data-profile-view="profile">👤 Meu perfil</button><button data-profile-view="room">💬 Sala da semana</button></nav><section id="room-profile"></section><section id="room-content"></section></main>`;
+  root.innerHTML = `<main class="room-page"><header class="room-header"><div><p class="room-eyebrow">AMPLIFY · BEST OF THE WEEK</p><p class="profile-brand">Best of the week ✨</p></div><nav><button id="room-logout" class="secondary">Sair</button></nav></header><p id="room-error" role="alert"></p><nav class="profile-tabs" aria-label="Minha área"><button data-profile-view="profile">👤 Meu perfil</button><button data-profile-view="room">💬 Sala da semana</button>${user.role==='admin'?'<button id="room-admin" data-profile-view="admin">⚙️ Administrador</button>':''}</nav><section id="room-profile"></section><section id="room-content"></section>${user.role==='admin'?'<section id="admin-panel" hidden></section>':''}</main>`;
   document.getElementById('room-logout').onclick = async () => {
     try { await save(false); await api('auth',{action:'logout'}); for(const k of Object.keys(localStorage)) if(k.startsWith('amplify_melhores')) localStorage.removeItem(k); location.reload(); } catch(e) {error(e.message);}
   };
-  const toggle=document.getElementById('room-admin');
-  if(toggle) toggle.onclick=async()=>{
-    try {
-      toggle.disabled=true;
-      let panel=document.getElementById('admin-panel');
-      if(!panel){panel=document.createElement('section');panel.id='admin-panel';panel.hidden=true;root.after(panel);}
-      if(panel.hidden){const {openAdminPanel}=await import('./admin.js');await openAdminPanel(panel,api);adminLoaded=true;toggle.textContent='Ocultar painel';panel.scrollIntoView({behavior:'smooth'});}
-      else{panel.hidden=true;document.getElementById('legacy-panel').hidden=true;toggle.textContent='Painel adm';}
-    }catch(e){toggle.textContent='Painel adm';error(e.message);}finally{toggle.disabled=false;}
-  };
   root.addEventListener('click', async e => {
-    const viewButton=e.target.closest('[data-profile-view]');if(viewButton){changeView(viewButton.dataset.profileView);return;}
+    const viewButton=e.target.closest('[data-profile-view]');if(viewButton){
+      const view=viewButton.dataset.profileView;changeView(view);
+      if(view==='admin'&&user.role==='admin'&&!adminLoaded){
+        viewButton.disabled=true;
+        try{const {openAdminPanel}=await import('./admin.js');await openAdminPanel(document.getElementById('admin-panel'),api);adminLoaded=true;}
+        catch(e){error(e.message);}finally{viewButton.disabled=false;changeView(currentView);}
+      }
+      return;
+    }
     const b=e.target.closest('[data-room-action]');if(!b)return;
     b.disabled=true;error('');
     try {
