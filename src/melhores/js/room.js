@@ -1,3 +1,4 @@
+import {createMeetingSound} from './sound.js';
 import '../css/room.css';
 import '../css/brand.css';
 const root = document.getElementById('weekly-room');
@@ -5,6 +6,7 @@ const themeControl=document.createElement('div');
 themeControl.className='theme-control';
 themeControl.innerHTML='<label for="melhores-theme">🎨 Aparência</label><select id="melhores-theme"><option value="light">☀️ Tema claro</option><option value="dark">🌙 Tema escuro</option></select>';
 root.before(themeControl);
+const meetingSound=createMeetingSound(themeControl);
 const themeSelect=themeControl.querySelector('select');
 let savedTheme;try{savedTheme=localStorage.getItem('melhores_theme');}catch{}
 themeSelect.value=['light','dark'].includes(savedTheme)?savedTheme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
@@ -20,6 +22,7 @@ let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = fal
 let draftRevision = 0;
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='';
 function changeView(view){
+ if(view!=='room')meetingSound.stop();
  if(view==='admin'&&user.role!=='admin')return;
  currentView=view;document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
  if(view!=='admin')document.getElementById('legacy-panel').hidden=true;
@@ -96,6 +99,7 @@ async function poll(){
   try{state=await api('room'); offset=state.serverTime-Date.now();render();}catch(e){error(e.message);}finally{polling=false;}
 }
 function render(){
+  meetingSound.update(state.room,!!state.room?.members.some(m=>m.id===user.id));
   const room=state.room,admin=user.role==='admin'&&(!room?.administrator||room.administrator.id===user.id),host=esc(room?.administrator?.name||'Administrador'),content=document.getElementById('room-content');
   const key=(room?.id||'none')+':'+(room?.phase||'none')+':'+!!room?.members.some(m=>m.id===user.id);
   if(layout!==key){

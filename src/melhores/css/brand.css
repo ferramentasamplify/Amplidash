@@ -124,3 +124,6 @@ html[data-theme=light] .room-page button.secondary,html[data-theme=light] #admin
 html[data-theme=light] .profile-empty,html[data-theme=light] .goals-how,html[data-theme=light] .profile-win{background:#c8ddfa;border-color:#97b9e9}
 html[data-theme=light] .vote-candidate{background:#dae9ff}
 html[data-theme=light] .vote-dialog{background:#c8ddfa}
+.sound-toggle{position:fixed;right:16px;bottom:16px;z-index:11000;border:1px solid #89aee5;border-radius:30px;padding:11px 16px;background:#173861;color:#fff;font:600 13px 'Work Sans',sans-serif;cursor:pointer;box-shadow:0 4px 18px #001b5940}
+.sound-toggle:focus-visible{outline:3px solid #ff8db3;outline-offset:3px}
+html[data-theme=light] .sound-toggle{background:#c7dcfb;color:#082b72}
