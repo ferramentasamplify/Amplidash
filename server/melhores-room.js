@@ -3,6 +3,7 @@ import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { authenticate, sameOrigin, users, json, update } from './melhores-auth.js';
+const adminActions = ['start','extend','present','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'];
 const categories = ['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 export async function roomRequest(request, deps = {}) {
@@ -19,7 +20,7 @@ export async function roomRequest(request, deps = {}) {
       if (action === 'create') {
         await update(store, 'active-room', old => {
           if (old && old.phase !== 'closed') fail('Encerre a sala atual antes de criar outra.', 409);
-          return { id: randomBytes(8).toString('hex'), phase: 'waiting', createdAt: new Date().toISOString(), members: [], deadline: null, current: 0, votes: { best: {}, worst: {} }, results: {}, goalResults: {} };
+          return { id: randomBytes(8).toString('hex'), phase: 'waiting', createdAt: new Date().toISOString(), administratorId: user.id, members: [], deadline: null, current: 0, votes: { best: {}, worst: {} }, results: {}, goalResults: {} };
         });
       } else if (action === 'save') {
         const room = await store.get('active-room', { type: 'json' });
@@ -37,6 +38,10 @@ export async function roomRequest(request, deps = {}) {
         if (presenceRoom) await Promise.all(presenceRoom.members.map(async id => { presence[id] = await store.get(`presence/${presenceRoom.id}/${id}`, {type:'json'}); }));
         await update(store, 'active-room', room => {
           if (!room || room.id !== body.roomId) fail('A sala mudou. Atualize a página.', 409);
+          if (adminActions.includes(action)) {
+            room.administratorId ||= accounts.find(a => a.role === 'admin')?.id;
+            if (room.administratorId !== user.id) fail('Somente o administrador desta sessão pode conduzir a reunião.', 403);
+          }
           if (action === 'join') {
             if (room.phase !== 'waiting' && !room.members.includes(user.id)) fail('A rodada já começou. Aguarde a próxima sala.', 409);
             if (!room.members.includes(user.id)) room.members.push(user.id);
@@ -153,7 +158,7 @@ export async function roomRequest(request, deps = {}) {
     const kind = room.phase.endsWith('-best') ? 'best' : 'worst';
     const voting = room.phase.startsWith('voting-');
     const safeProfile = personalProfile(game,user);
-    return json({ ok: true, user, profile:safeProfile, room: { ...publicRoom, members: rows,
+    return json({ ok: true, user, profile:safeProfile, room: { ...publicRoom, administrator: (() => { const a = accounts.find(a => a.id === (room.administratorId || accounts.find(a => a.role === 'admin')?.id)); return a ? {id:a.id, name:a.name, username:a.username} : null; })(), members: rows,
       ...(voting ? {voted:!!votes?.[kind]?.[user.id], voteCount:Object.keys(votes?.[kind]||{}).length} : {}) }, serverTime: Date.now() });
   } catch (e) { console.error('[room]', e.message); return json({ ok: false, error: e.status ? e.message : 'Não foi possível acessar a sala. Tente novamente.' }, e.status || 503); }
 }
