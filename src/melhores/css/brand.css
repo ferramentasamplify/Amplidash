@@ -25,7 +25,11 @@ body{background:radial-gradient(ellipse at top right,#2469f4,transparent 55%),li
 .profile-goal,.profile-win,.profile-room-invite,.profile-empty,.waiting-goals,.goals-how,.goals-person,.live-goal,.vote-candidate,.admin-rank-card{background:linear-gradient(130deg,#1957cd,#103d9d);border-color:var(--amplify-border)}
 .profile-goal-emoji,.live-goal-emoji{background:#ffffff15}
 .profile-win-date,.profile-win-story,.profile-goal p,.profile-room-invite p{color:var(--amplify-muted)}
-.profile-form-link{color:#fff}
+.profile-form-link{display:inline-flex;align-items:center;justify-content:center;min-height:46px;box-sizing:border-box;background:var(--user-primary,#1655dc);color:#fff!important;font-weight:800;border:1px solid color-mix(in srgb,var(--user-primary,#1655dc),white 35%);box-shadow:0 5px 0 color-mix(in srgb,var(--user-primary,#1655dc),black 35%);transition:transform .18s,box-shadow .18s}
+.profile-form-link:hover{transform:translateY(-2px)}
+.profile-form-link:active{transform:translateY(3px);box-shadow:0 2px 0 color-mix(in srgb,var(--user-primary,#1655dc),black 35%)}
+.profile-form-link:focus-visible{outline:3px solid var(--user-accent,#fa7298);outline-offset:4px}
+@media(prefers-reduced-motion:reduce){.profile-form-link{transition:none}.profile-form-link:hover,.profile-form-link:active{transform:none}}
 .room-story,.vote-story,.profile-win-story,.live-goal-text{background:#062f84;color:#fff}
 .vote-overlay,.gymrats-overlay{background:#001b59da;backdrop-filter:blur(8px)}
 .vote-dialog,.winner-card{background:radial-gradient(ellipse at top,#3b78eb66,transparent 70%),linear-gradient(140deg,#1454ca,#082e80);border-color:#ffffff70;color:#fff}

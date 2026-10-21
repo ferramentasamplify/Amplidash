@@ -14,5 +14,5 @@ export function personalProfile(game,user){
  const count=kind=>achievements.filter(a=>a.kind===kind).length;
  const bestWins=Math.max(count('best'),Number(participant?.scoreBreakdown?.melhorFato)||0);
  const worstWins=Math.max(count('worst'),Number(participant?.scoreBreakdown?.piorFato)||0);
- return {name:participant?.name||user.name,photoUrl:participant?.photoUrl||'',objectives:participant?.objectives||{},achievements,bestWins,worstWins,goalsActive:participant?.sheetEnrollment?.active===true,goalsFormUrl:process.env.MELHORES_GOALS_FORM_URL||null};
+ return {name:participant?.name||user.name,photoUrl:participant?.photoUrl||'',objectives:participant?.objectives||{},achievements,bestWins,worstWins,goalsActive:participant?.sheetEnrollment?.active===true,goalsFormUrl:process.env.MELHORES_GOALS_FORM_URL||'https://forms.gle/LdSj6Zk3Y43jctqM9'};
 }
