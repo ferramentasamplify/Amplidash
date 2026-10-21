@@ -112,3 +112,15 @@ html[data-theme=dark] .room-page .profile-tabs button:hover{background:#1c365b;c
 .button-feedback{animation:button-confirm .48s ease-out}
 @keyframes button-confirm{0%{scale:1}35%{scale:.94;filter:brightness(1.3)}70%{scale:1.035}100%{scale:1}}
 @media(prefers-reduced-motion:reduce){.room-page button,#admin-panel button{transition:none}.button-feedback{animation:none}.room-page button:not(:disabled):hover,#admin-panel button:not(:disabled):hover,.room-page .profile-tabs button:not(:disabled):hover,.room-page button:not(:disabled):active,#admin-panel button:not(:disabled):active{transform:none}}
+/* Light is a blue-tinted identity, with selective white and pink accents. */
+html[data-theme=light] body{background:radial-gradient(ellipse at 90% 0,#a8caff,transparent 60%),linear-gradient(150deg,#dceaff,#bed6fa)}
+html[data-theme=light] .room-card,html[data-theme=light] .profile-room-invite,html[data-theme=light] .waiting-goals,html[data-theme=light] .goals-person,html[data-theme=light] #admin-panel .admin-welcome,html[data-theme=light] .room-page #room-content>.room-card:first-child{background:linear-gradient(135deg,#d1e3ff,#b7d2fa);border-color:#87afe6}
+html[data-theme=light] .profile-goal,html[data-theme=light] .live-goal,html[data-theme=light] #admin-panel .admin-user,html[data-theme=light] .admin-rank-card{background:linear-gradient(135deg,#e4efff,#c8defb);border-color:#97b9e9}
+html[data-theme=light] .profile-goal:nth-child(2n),html[data-theme=light] .live-goal:nth-child(2n){background:linear-gradient(135deg,#ffe5ee,#f4d9e8);border-color:#e8acc3}
+html[data-theme=light] .profile-tabs{background:#a6c5f2;border-color:#7ca4dd}
+html[data-theme=light] .room-page .profile-tabs button{color:#123976}
+html[data-theme=light] .room-page .profile-tabs button.active{background:#0d49bb;color:#fff;box-shadow:0 3px 9px #123b7830}
+html[data-theme=light] .room-page button.secondary,html[data-theme=light] #admin-panel .admin-button-secondary{background:#c7dcfb;color:#082b72;border-color:#7ca4dd;box-shadow:0 4px 0 #7fa4da}
+html[data-theme=light] .profile-empty,html[data-theme=light] .goals-how,html[data-theme=light] .profile-win{background:#c8ddfa;border-color:#97b9e9}
+html[data-theme=light] .vote-candidate{background:#dae9ff}
+html[data-theme=light] .vote-dialog{background:#c8ddfa}
