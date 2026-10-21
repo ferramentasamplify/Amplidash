@@ -170,3 +170,6 @@ html[data-palette] .winner-card.winner-sad{background:radial-gradient(ellipse at
 html[data-palette] .winner-sad .winner-point{background:#334155!important;border-color:#94a3b8!important;color:#f1f5f9!important}
 html[data-palette] .winner-sad .winner-award{color:#cbd5e1!important}
 .winner-sad .winner-confetti{animation:none}
+
+/* Metas pendentes: aviso amarelo independente da paleta pessoal. */
+#admin-panel .admin-badge.is-incomplete{background:#fef3c7;color:#713f12;border-color:#facc15}
