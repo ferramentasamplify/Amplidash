@@ -95,3 +95,14 @@ test('account import is admin-only, stores hashes and never replaces existing pa
  assert.equal((await authRequest(request('',{username:'new-person',password:'new-test-password'}),store)).status,200);
  assert.equal(await requireAdmin(request(admin),store),null);
 });
+
+test('native Netlify adapter forwards cookies and rejects bad JSON, huge payloads and wrong methods', async()=>{
+ const { serve }=await import('../server/melhores-netlify.js');
+ const invoke=async request=>serve(request, r=>({status:200,headers:{'Content-Type':'application/json'},body:{method:r.method,host:r.headers.host,cookie:r.headers.cookie}}));
+ const response=await invoke(new Request('https://example.com/api',{headers:{cookie:'test=1'}}));assert.deepEqual(await response.json(),{method:'GET',host:'example.com',cookie:'test=1'});
+ assert.equal((await invoke(new Request('https://example.com/api',{method:'POST',body:'{broken'}))).status,400);
+ assert.equal((await invoke(new Request('https://example.com/api',{method:'POST',body:'x'.repeat(100001)}))).status,413);
+ assert.equal((await invoke(new Request('https://example.com/api',{method:'DELETE'}))).status,405);
+ const state=await import('../netlify/functions/melhores-state.js');assert.equal((await state.default(new Request('https://example.com/api/melhores/state'))).status,401);
+ const reset=await import('../netlify/functions/melhores-reset.js');assert.equal((await reset.default(new Request('https://example.com/api/melhores/reset'))).status,405);
+});
