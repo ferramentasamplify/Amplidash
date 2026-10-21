@@ -20,5 +20,12 @@ export async function serve(request, handler, methods = ['GET', 'POST']) {
     console.error('[request]', e.message);
     response = json({ ok: false, error: 'Não foi possível processar o pedido.' }, e instanceof SyntaxError ? 400 : 503);
   }
+  if (response.status >= 500) {
+    try {
+      const raw = globalThis.netlifyBlobsContext || process.env.NETLIFY_BLOBS_CONTEXT;
+      const keys = raw ? Object.keys(JSON.parse(Buffer.from(raw, 'base64').toString('utf8'))) : [];
+      console.error('[blobs-context-keys] ' + JSON.stringify(keys));
+    } catch { console.error('[blobs-context] unavailable'); }
+  }
   return new Response(JSON.stringify(response.body), { status: response.status, headers: response.headers });
 }

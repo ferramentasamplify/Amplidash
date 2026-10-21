@@ -90,5 +90,5 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
     const token = randomBytes(32).toString('hex');
     await store.setJSON('sessions/' + digest(token), { userId: user.id, expires: Date.now() + 12 * 3600e3, version: digest(user.hash) });
     return json({ ok: true, user: publicUser(user) }, 200, { 'Set-Cookie': cookie(token) + '; Max-Age=43200' });
-  } catch (e) { console.error('[auth]', e.message); return json({ ok: false, error: 'Não foi possível autenticar. Confira a configuração do servidor.' }, e.status || 503); }
+  } catch (e) { console.error('[auth] ' + e.name + ': ' + e.message); return json({ ok: false, code: e.message.includes('uncachedEdgeURL') ? 'BLOBS_STRONG_CONTEXT' : e.message.includes('Contas não configuradas') ? 'AUTH_CONFIG' : e.name, error: 'Não foi possível autenticar. Confira a configuração do servidor.' }, e.status || 503); }
 }
