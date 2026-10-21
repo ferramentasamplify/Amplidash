@@ -127,3 +127,10 @@ html[data-theme=light] .vote-dialog{background:#c8ddfa}
 .sound-toggle{position:fixed;right:16px;bottom:16px;z-index:11000;border:1px solid #89aee5;border-radius:30px;padding:11px 16px;background:#173861;color:#fff;font:600 13px 'Work Sans',sans-serif;cursor:pointer;box-shadow:0 4px 18px #001b5940}
 .sound-toggle:focus-visible{outline:3px solid #ff8db3;outline-offset:3px}
 html[data-theme=light] .sound-toggle{background:#c7dcfb;color:#082b72}
+/* Standard surfaces: the same background across profile, room and administration. */
+html[data-theme=light]{--meeting-surface:linear-gradient(135deg,#d6e6ff,#bed7fa);--meeting-edge:#97b9e9}
+html[data-theme=dark]{--meeting-surface:linear-gradient(135deg,#172c50,#0b1b34);--meeting-edge:#5273a4}
+html[data-theme] .room-page .room-card,html[data-theme] .room-page .profile-goal,html[data-theme] .room-page .profile-goal:nth-child(2n),html[data-theme] .room-page .live-goal,html[data-theme] .room-page .live-goal:nth-child(2n),html[data-theme] .room-page .profile-win,html[data-theme] .room-page .profile-empty,html[data-theme] .room-page .waiting-goals,html[data-theme] .room-page .goals-person,html[data-theme] .room-page .goals-how,html[data-theme] #admin-panel .admin-user,html[data-theme] #admin-panel .admin-welcome,html[data-theme] .room-page .admin-rank-card,html[data-theme] .room-page #room-content>.room-card:first-child{background:var(--meeting-surface);border-color:var(--meeting-edge)}
+.meeting-notice{display:flex;flex-direction:column;gap:12px;margin:20px 0;font-size:20px;font-weight:600;line-height:1.5}
+.meeting-countdown{font-size:clamp(28px,5vw,48px);font-variant-numeric:tabular-nums;letter-spacing:.03em}
+.meeting-notice small{font-size:12px;font-weight:400}
