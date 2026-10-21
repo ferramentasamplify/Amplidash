@@ -110,6 +110,7 @@ function render(){
   const stage=document.getElementById('room-stage');
   stage.closest('.room-columns').classList.toggle('goals-layout',room?.phase==='goals');
   const labels={exercicio:'💪 Exercício físico',familia:'👨‍👩‍👧‍👦 Família',alimentacao:'🥗 Alimentação',hobbies:'🎨 Hobbies',conhecimentos:'📚 Conhecimentos'};
+  if(room?.phase==='presenting' && room.members.filter(m=>m.online).length<2) document.getElementById('room-controls').insertAdjacentHTML('beforeend','<p class="vote-empty-note" role="status">👥 Para abrir a votação, pelo menos duas pessoas precisam estar conectadas. Ninguém pode votar em si mesmo.</p>');
   if(room && /^(voting|tie|result)-/.test(room.phase)) {
     const kind=room.phase.endsWith('-best')?'best':'worst',field=kind==='best'?'best':'worst',title=kind==='best'?'melhor':'pior';
     document.getElementById('room-status').innerHTML=`<h2>Votação do ${title} da semana</h2><p>Ninguém pode votar em si mesmo.</p>`;
