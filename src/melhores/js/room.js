@@ -14,11 +14,12 @@ const photo = url => { try { return (new URL(url).protocol === 'https:' || /^dat
 const initials=name=>{const parts=String(name||'').trim().split(/\s+/);return (parts.length>1?parts.slice(0,2).map(n=>n[0]).join(''):parts[0].slice(0,2)).toUpperCase();};
 const avatar=(url,name)=>`<span class="member-portrait">${photo(url)||`<span>${esc(initials(name))}</span>`}</span>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, saving = Promise.resolve(), adminLoaded = false;
+let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, actionPending = false, saving = Promise.resolve(), adminLoaded = false;
 let draftRevision = 0;
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
-let previousRoom=null;
+let previousRoom=null,actionRevision=0;
 function changeView(view){
+ if(view!=='room')document.querySelector('.meeting-ending[open]')?.close();
  if(view!=='room')meetingSound.stop();
  if(view==='admin'&&user.role!=='admin')return;
  currentView=view;document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
@@ -75,32 +76,46 @@ async function shell() {
       return;
     }
     const b=e.target.closest('[data-room-action]');if(!b)return;
-    b.disabled=true;error('');
+    if(actionPending)return;
+    actionPending=true;actionRevision++;b.disabled=true;error('');
     try {
       if(b.dataset.roomAction==='present' && !confirm('Encerrar a escrita e começar a apresentação? Os participantes não poderão mais editar.'))return;
       if(b.dataset.roomAction==='close' && !confirm('Encerrar esta sala? Os relatos serão preservados.'))return;
       let gymrats;
       if(b.dataset.roomAction==='mark'&&b.dataset.category==='exercicio'&&b.dataset.result==='done')gymrats=await confirmGymrats();
+      if(b.dataset.roomAction==='mark'){
+        const result=gymrats===false?'missed':b.dataset.result;
+        b.closest('.live-goal-actions')?.querySelectorAll('button').forEach(el=>{el.dataset.pendingMark=el.dataset.result===result?'selected':'dim';});
+      }
       await save(false);
-      state=await api('room',{action:b.dataset.roomAction, roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})});
+      receiveState(await api('room',{action:b.dataset.roomAction, roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})}));
       render();
-      if(b.dataset.roomAction==='close' && adminLoaded) location.reload();
-    }catch(e){error(e.message);}finally{b.disabled=false;}
+
+    }catch(e){error(e.message);}finally{actionPending=false;b.disabled=false;root.querySelectorAll('[data-pending-mark]').forEach(el=>el.removeAttribute('data-pending-mark'));}
   });
-  await poll();setInterval(poll,2500);setInterval(tick,250);
+  await poll();setInterval(poll,1200);setInterval(tick,250);
 }
 function choice(action,label,attrs={}) { return `<button data-room-action="${action}" ${Object.entries(attrs).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>${esc(label)}</button>`; }
 function button(action,label,seconds='') { return `<button data-room-action="${action}" ${seconds?`data-seconds="${seconds}"`:''}>${label}</button>`; }
 function confirmGymrats(){
  return new Promise(resolve=>{const overlay=document.createElement('div');overlay.className='gymrats-overlay';overlay.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="gymrats-title"><span class="gymrats-mouse">🐭</span><h2 id="gymrats-title">Está no GymRats?</h2><p>O exercício só vale ponto com registro no GymRats.</p><div><button data-gymrats="yes">⭐ Sim, está registrado</button><button data-gymrats="no">💩 Não está registrado</button></div></section>';document.body.append(overlay);overlay.querySelectorAll('button').forEach(b=>b.onclick=()=>{overlay.remove();resolve(b.dataset.gymrats==='yes');});overlay.querySelector('button').focus();});
 }
+function openingAnimation(){
+  if(document.getElementById('meeting-opening'))return;
+  const overlay=document.createElement('div');overlay.id='meeting-opening';overlay.className='meeting-opening';overlay.setAttribute('role','status');
+  overlay.innerHTML='<div><span>✨ 🎬 ✨</span><h1>Best of the Week</h1><p>Valendo! Conte como foi sua semana 💙</p></div>';
+  document.body.append(overlay);setTimeout(()=>overlay.remove(),2400);
+}
+function receiveState(nextState){
+ const next=nextState.room,finished=r=>r&&['completed','closed'].includes(r.phase);
+ const watching=currentView==='room'&&next?.id===previousRoom?.id&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id);
+ if(watching&&!finished(previousRoom)&&finished(next))endingRoom=next.id;
+ if(watching&&previousRoom.phase==='waiting'&&next.phase==='writing')openingAnimation();
+ previousRoom=next;state=nextState;offset=state.serverTime-Date.now();
+}
 async function poll(){
-  if(polling)return;polling=true;
-  try{state=await api('room');
-    const next=state.room,finished=r=>r&&['completed','closed'].includes(r.phase);
-    if(next?.id===previousRoom?.id&&!finished(previousRoom)&&finished(next)&&currentView==='room'&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id))endingRoom=next.id;
-    previousRoom=next;
-    offset=state.serverTime-Date.now();render();}catch(e){error(e.message);}finally{polling=false;}
+ if(polling||actionPending)return;polling=true;const revision=actionRevision;
+ try{const next=await api('room');if(!actionPending&&revision===actionRevision){receiveState(next);render();}}catch(e){error(e.message);}finally{polling=false;}
 }
 function render(){
   meetingSound.update(state.room,!!state.room?.members.some(m=>m.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
@@ -124,7 +139,7 @@ function render(){
   }
   const joined=room?.members.some(m=>m.id===user.id);
   document.getElementById('room-status').innerHTML = !room?`<p class="room-eyebrow">📅 THE BEST · NOSSO ENCONTRO</p><h2>Ainda não iniciamos</h2><div class="meeting-notice" data-meeting-notice>${meetingNotice(Date.now()+offset)}</div><p>A sala ainda não foi criada. Aguarde o administrador abrir o encontro.</p>`:room.phase==='waiting'?`<p class="room-eyebrow">💬 NOSSO PONTO DE ENCONTRO</p><h2>Chegou a hora de compartilhar ✨</h2><p>Entre, se acomode e aguarde ${host} iniciar os 5 minutos. Cada história tem seu espaço por aqui. 🌱</p>`:room.phase==='writing'?'<p class="room-eyebrow">HORA DE ESCREVER</p><div id="room-clock" class="room-clock" role="timer"></div><p id="room-clock-hint"></p>':room.phase==='presenting'?'<p class="room-eyebrow">VAMOS OUVIR</p><h2>Uma história de cada vez</h2><p>Sem pressa: a apresentação não tem cronômetro.</p>':'<h2>Encontro encerrado</h2><p>Os relatos foram preservados. Até a próxima semana!</p>';
-  document.getElementById('room-controls').innerHTML=(!room||room.phase==='closed')?(admin?button('create','Criar sala da semana'):''): (room.phase==='waiting'?(!joined?button('join','Entrar na sala'):'<span>Você está na sala ✓</span>')+(admin?button('start','Iniciar os 5 minutos'):''):'')+(admin?(room.phase==='writing'?button('extend','+1 minuto',60)+button('extend','+5 minutos',300)+button('present','Iniciar apresentação'):'')+(room.phase==='presenting'?(room.presentationFact!=='worst'?button('show-worst','🌧️ Mostrar o pior fato →'):room.current<room.members.length-1?button('next','Próxima pessoa →'):button('vote-best','🗳️ Abrir votação do melhor')):'')+button('close','Encerrar sala'):'');
+  document.getElementById('room-controls').innerHTML=(!room||room.phase==='closed')?(admin?button('create','Criar sala da semana'):''): (room.phase==='waiting'?(!joined?button('join','Entrar na sala'):'<span>Você está na sala ✓</span>')+(admin?button('start','🎬 Iniciar Best of the Week'):''):'')+(admin?(room.phase==='writing'?button('extend','+1 minuto',60)+button('extend','+5 minutos',300)+button('present','Iniciar apresentação'):'')+(room.phase==='presenting'?(room.presentationFact!=='worst'?button('show-worst','🌧️ Mostrar o pior fato →'):room.current<room.members.length-1?button('next','Próxima pessoa →'):button('vote-best','🗳️ Abrir votação do melhor')):'')+button('close','Encerrar sala'):'');
   document.getElementById('room-members').innerHTML=(room?.members||[]).map(m=>`<li>${avatar(m.photoUrl,m.name)}<span>${esc(m.name)}</span><small>${!m.online?'Desconectado':m.done?'Na sala · ✓ Terminou':room.phase==='writing'?'Na sala · Escrevendo…':'Na sala'}</small></li>`).join('')||'<li>Ninguém entrou ainda.</li>';
   const stage=document.getElementById('room-stage');
   stage.closest('.room-columns').hidden=!room;
@@ -152,10 +167,11 @@ function render(){
     const done=Object.keys(marked).length;
     document.getElementById('room-status').innerHTML=`<p class="room-eyebrow">🎯 METAS PESSOAIS · HORA DE CONVERSAR</p><h2>${host} conduz. Você conta. ✨</h2><p>${host} vai chamar cada pessoa, perguntar sobre as cinco metas e marcar os resultados. Há um único administrador por sessão. Quem estiver na vez responde <strong>“sim” ou “não”</strong>; o restante do time acompanha. 👂</p>`;
     stage.innerHTML=`<section class="goals-person"><div class="goals-person-avatar">${photo(person.photoUrl)||`<span>${esc(initials)}</span>`}</div><div><p class="room-eyebrow">🎤 É A VEZ DE · ${room.current+1} DE ${room.members.length}</p><h2>${esc(person.name)}</h2><p>${person.id===user.id?`Sua vez! Responda às perguntas de ${host}. 💬`:'Vamos ouvir '+esc(person.name)+'. Cada meta, uma resposta. 💬'}</p></div><span class="goals-count">${done}/5 avaliadas</span></section><div class="goals-how"><span>🎙️ <strong>${host} pergunta</strong></span><span>💬 <strong>A pessoa responde sim ou não</strong></span><span>✍️ <strong>Só ${host} marca</strong></span></div>${!person.online?'<p class="goals-offline">🌙 Sem sinal recente. Após 60 segundos sem conexão, metas ainda não avaliadas recebem ausência automaticamente: −1 por meta.</p>':''}<div class="live-goals-grid">${Object.entries(goalLabels).map(([key,[emoji,label]])=>`<article class="live-goal live-goal-${key} ${marked[key]?'has-result result-'+marked[key]:''}"><div class="live-goal-header"><span class="live-goal-emoji" aria-hidden="true">${emoji}</span><h3>${label}</h3></div><p class="live-goal-text">${esc(person.objectives?.[key]||'Meta ainda não preenchida. 🌱')}</p><p class="live-goal-result">${({done:'⭐ Cumpriu · +1 ponto',missed:'💩 Não cumpriu · 0 ponto',absent:'🌙 Ausente · −1 ponto'})[marked[key]]||`⏳ Aguardando a pergunta de ${host}`}</p>${admin&&person.online?`<div class="live-goal-actions">${[['done','⭐ Sim, cumpriu'],['missed','💩 Não cumpriu'],...[]].map(([result,text])=>`<button data-room-action="mark" data-target="${esc(person.id)}" data-category="${key}" data-result="${result}" class="goal-answer goal-answer-${result}" aria-pressed="${marked[key]===result}">${text}</button>`).join('')}</div>`:`<p class="live-goal-observer">👀 Acompanhe por aqui. Somente ${host}, administrador desta sessão, marca os resultados ao vivo.</p>`}</article>`).join('')}</div><footer class="goals-footer"><p>${admin?'📝 Marque as cinco metas para avançar.':`🙌 Você não precisa clicar em nada. Responda quando ${host} chamar.`}</p>${admin?choice('next-goal',room.current===room.members.length-1?'✨ Concluir metas':'Próxima pessoa →',{target:person.id}):''}</footer>`;
-  }else if(room&&['completed','closed'].includes(room.phase)&&endingRoom===room.id){
+  }else if(room&&['completed','closed'].includes(room.phase)&&endingRoom===room.id&&currentView==='room'){
     const complete=room.phase==='completed'||room.completedAt;
     document.getElementById('room-status').innerHTML='';document.getElementById('room-controls').innerHTML='';
-    stage.innerHTML=`<section class="meeting-ending" role="dialog" aria-modal="true" aria-labelledby="ending-title"><div class="ending-card"><span class="ending-emoji">🌅 ✨</span><p class="room-eyebrow">NOSSO ENCONTRO CHEGOU AO FIM</p><h1 id="ending-title" tabindex="-1">É isso!<br>Tenha um bom final de semana!</h1><p>${complete?'Metas concluídas, histórias compartilhadas e pontos registrados.':'A sala foi encerrada. Seus relatos foram preservados.'}</p><p>Descanse, aproveite e até o próximo encontro. 💙</p><div class="ending-actions"><button data-profile-view="profile">👤 Ir para meu perfil</button>${admin?'<button data-profile-view="admin">🏆 Administrador e rankings</button>'+button('create','✨ Criar próxima sala'):''}</div></div></section>`;
+    stage.innerHTML=`<dialog class="meeting-ending" aria-labelledby="ending-title"><div class="ending-card"><span class="ending-emoji">🌅 ✨</span><p class="room-eyebrow">NOSSO ENCONTRO CHEGOU AO FIM</p><h1 id="ending-title" tabindex="-1">É isso!<br>Tenha um bom final de semana!</h1><p>${complete?'Metas concluídas, histórias compartilhadas e pontos registrados.':'A sala foi encerrada. Seus relatos foram preservados.'}</p><p>Descanse, aproveite e até o próximo encontro. 💙</p><div class="ending-actions"><button data-profile-view="profile">👤 Ir para meu perfil</button>${admin?'<button data-profile-view="admin">🏆 Administrador e rankings</button>'+button('create','✨ Criar próxima sala'):''}</div></div></dialog>`;
+    const ending=stage.querySelector('.meeting-ending');ending.addEventListener('cancel',e=>e.preventDefault());ending.showModal();
     if(lastEnding!==room.id){lastEnding=room.id;if(joined)currentView='room';requestAnimationFrame(()=>document.getElementById('ending-title')?.focus());}
   }else if(room&&['completed','closed'].includes(room.phase)){
     stage.innerHTML='<p>O encontro já terminou. Até a próxima semana! 💙</p>';

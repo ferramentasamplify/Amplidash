@@ -22,11 +22,12 @@ export function createMeetingSound(container) {
     }
   }
   const best=[[523,0,.16],[659,.13,.16],[784,.26,.2],[1047,.45,.55]];
-  const worst=[[392,0,.2],[330,.18,.2],[262,.36,.2],[392,.58,.42]];
+  // Slow descending minor phrase, like a sympathetic sad trombone.
+  const worst=[[311,0,.55],[294,.58,.55],[262,1.16,.65],[196,1.84,1.35],[155,1.84,1.35]];
   const melody=[523,659,784,659,587,698,880,698,659,784,1047,988,880,784,659,523];
   const ending=melody.map((hz,i)=>[hz,i*.3,.38]);
   for(let i=0;i<4;i++)for(const hz of [131,165,196])ending.push([hz,i*1.2,1.15]);
-  function celebrate(kind){stop();notes(kind==='best'?best:kind==='worst'?worst:ending,'sine',kind==='ending'?.09:.16);}
+  function celebrate(kind){stop();notes(kind==='best'?best:kind==='worst'?worst:ending,'sine',kind==='ending'?.09:kind==='worst'?.12:.16);}
   toggle.onclick=()=>{enabled=!enabled;try{localStorage.setItem('melhores_sound',enabled?'on':'off');}catch{}label();if(enabled){unlock();notes([[659,0,.12],[880,.1,.18]]);}else stop();};
   document.addEventListener('pointerdown',unlock,{capture:true});
   document.addEventListener('keydown',unlock,{capture:true});
