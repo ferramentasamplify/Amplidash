@@ -1,6 +1,17 @@
 import '../css/room.css';
 import '../css/brand.css';
 const root = document.getElementById('weekly-room');
+const themeControl=document.createElement('div');
+themeControl.className='theme-control';
+themeControl.innerHTML='<label for="melhores-theme">🎨 Aparência</label><select id="melhores-theme"><option value="light">☀️ Tema claro</option><option value="dark">🌙 Tema escuro</option></select>';
+root.before(themeControl);
+const themeSelect=themeControl.querySelector('select');
+let savedTheme;try{savedTheme=localStorage.getItem('melhores_theme');}catch{}
+themeSelect.value=['light','dark'].includes(savedTheme)?savedTheme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+function applyTheme(){document.documentElement.dataset.theme=themeSelect.value;try{localStorage.setItem('melhores_theme',themeSelect.value);}catch{}}
+themeSelect.addEventListener('change',applyTheme);applyTheme();
+document.addEventListener('click',event=>{const b=event.target.closest('button');if(!b||b.disabled||!b.closest('#weekly-room'))return;b.classList.remove('button-feedback');void b.offsetWidth;b.classList.add('button-feedback');});
+
 const photo = url => { try { return (new URL(url).protocol === 'https:' || /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url)) ? `<img class="room-avatar" src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : ''; } catch { return ''; } };
 const initials=name=>{const parts=String(name||'').trim().split(/\s+/);return (parts.length>1?parts.slice(0,2).map(n=>n[0]).join(''):parts[0].slice(0,2)).toUpperCase();};
 const avatar=(url,name)=>`<span class="member-portrait">${photo(url)||`<span>${esc(initials(name))}</span>`}</span>`;

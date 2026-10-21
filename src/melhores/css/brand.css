@@ -69,3 +69,30 @@ body{background:radial-gradient(ellipse at top right,#2469f4,transparent 55%),li
 .room-page .vote-self{background:#123477;color:#d9e7ff;border-color:#91b1e9;box-shadow:none;opacity:1}
 .room-page .vote-empty-note{background:#fff;color:#082b72;border-left:5px solid #ff75a5;border-radius:12px;padding:18px;text-align:left}
 @media(prefers-reduced-motion:reduce){.room-page button,#admin-panel button{transition:none}}
+
+/* Theme choice is local to this browser; no account or score mutations. */
+.theme-control{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 20px;max-width:1120px;margin:auto;font:600 14px 'Work Sans',sans-serif;color:#fff}
+.theme-control select{font:inherit;border:1px solid #91b7ff;border-radius:12px;padding:10px;background:#fff;color:#082b72;max-width:180px}
+html[data-theme=dark]{color-scheme:dark}
+html[data-theme=dark] body{background:radial-gradient(ellipse at top right,#123b78,transparent 60%),#071329}
+html[data-theme=dark] .room-card,html[data-theme=dark] #admin-panel .admin-user,html[data-theme=dark] .live-goal,html[data-theme=dark] .waiting-goals,html[data-theme=dark] .profile-empty,html[data-theme=dark] .goals-person,html[data-theme=dark] .goals-how,html[data-theme=dark] .admin-rank-card{background:linear-gradient(135deg,#172c50,#0b1b34);border-color:#5273a4}
+html[data-theme=dark] .profile-goal{background:linear-gradient(145deg,#203c66,#122640);color:#fff;border-color:#5d83bc;border-top-color:#ff75a5}
+html[data-theme=dark] .profile-goal h3,html[data-theme=dark] .room-page .profile-goal p{color:#fff}
+html[data-theme=light]{color-scheme:light}
+html[data-theme=light] body{background:radial-gradient(ellipse at top right,#d4e4ff,transparent 60%),#f2f6ff;color:#082b72}
+html[data-theme=light] .room-page,html[data-theme=light] #admin-panel,html[data-theme=light] .profile-brand{color:#082b72!important}
+html[data-theme=light] .room-card,html[data-theme=light] .profile-room-invite,html[data-theme=light] .profile-win,html[data-theme=light] .profile-empty,html[data-theme=light] .waiting-goals,html[data-theme=light] .goals-person,html[data-theme=light] .goals-how,html[data-theme=light] .live-goal,html[data-theme=light] .admin-rank-card,html[data-theme=light] #admin-panel .admin-user,html[data-theme=light] #admin-panel .admin-welcome,html[data-theme=light] .room-page #room-content>.room-card:first-child{background:#fff;border-color:#b8cdf0;color:#082b72;box-shadow:0 10px 28px #123b7815}
+html[data-theme=light] .room-page p,html[data-theme=light] .room-page small,html[data-theme=light] #admin-panel .admin-user-login,html[data-theme=light] #admin-panel .admin-goal-progress,html[data-theme=light] .profile-stats strong,html[data-theme=light] .profile-section-title,html[data-theme=light] .category-leaders,html[data-theme=light] .rank-place,html[data-theme=light] .theme-control{color:#234573!important}
+html[data-theme=light] .room-eyebrow{color:#0649d8!important}
+html[data-theme=light] .profile-stats{border-color:#c4d6f2}
+html[data-theme=light] .room-story,html[data-theme=light] .vote-story,html[data-theme=light] .profile-win-story,html[data-theme=light] .live-goal-text,html[data-theme=light] .story-presentation .room-story{background:#edf4ff;color:#082b72!important;border-color:#bfd2f0}
+html[data-theme=light] .vote-candidate{background:#fff;color:#082b72;border-color:#9ab9ec}
+html[data-theme=light] .vote-dialog{background:#f2f6ff;color:#082b72;border-radius:24px;padding:24px}
+html[data-theme=light] .winner-card p,html[data-theme=light] .meeting-ending p{color:#fff!important}
+html[data-theme=light] #admin-panel .admin-stats>div{background:#eaf2ff;border-color:#bfd2f0}
+html[data-theme=light] #admin-panel .admin-stats strong,html[data-theme=light] #admin-panel .admin-stats span,html[data-theme=light] #admin-panel .admin-goal-progress strong{color:#082b72}
+.room-page .vote-story,.room-page .room-story,.room-page .profile-win-story,.room-page .live-goal-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none;-webkit-line-clamp:unset;line-clamp:unset;text-overflow:clip}
+.button-feedback{animation:button-feedback .32s ease-out}
+@keyframes button-feedback{50%{filter:brightness(1.22);scale:.97}100%{scale:1}}
+@media(prefers-reduced-motion:reduce){.button-feedback{animation:none}}
+@media(max-width:650px){.theme-control{padding:12px 16px}.theme-control select{font-size:13px}}
