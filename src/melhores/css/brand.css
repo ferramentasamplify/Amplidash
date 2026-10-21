@@ -51,3 +51,21 @@ body{background:radial-gradient(ellipse at top right,#2469f4,transparent 55%),li
 .room-page #room-content>.room-card:first-child{background:radial-gradient(ellipse at top right,#3d80ff55,transparent 65%),linear-gradient(120deg,#1454ca,#0a3592);border-color:var(--amplify-border)}
 .rank-place,.category-leaders{color:#fff!important}
 .room-clock.urgent{color:#ffd1e1}.room-clock.expired{color:#ffabc8}
+
+/* Contrast refinement: approved blue / white / pink-red palette. */
+.room-page button,#admin-panel button{border:1px solid #ff9fbe;box-shadow:0 4px 0 #910032,0 9px 20px #001b5940;transition:transform .15s,box-shadow .15s,background .15s}
+.room-page button:not(:disabled):hover,#admin-panel button:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 6px 0 #910032,0 12px 24px #001b5950}
+.room-page button:not(:disabled):active,#admin-panel button:not(:disabled):active{transform:translateY(2px);box-shadow:0 1px 0 #910032}
+.room-page button.secondary,#admin-panel .admin-button-secondary{background:#fff;color:#082b72;border-color:#fff;box-shadow:0 4px 0 #92b9ff,0 8px 18px #001b5930}
+.room-page button.secondary:hover,#admin-panel .admin-button-secondary:hover{background:#e9f1ff;color:#082b72}
+.room-page .profile-tabs button{box-shadow:none;border-color:transparent;transform:none}
+.room-page button:disabled,#admin-panel button:disabled{box-shadow:none;transform:none;cursor:not-allowed}
+.profile-goal{background:linear-gradient(145deg,#fff,#edf4ff);border:1px solid #fff;border-top:5px solid #ff75a5;box-shadow:0 10px 26px #001b5940;color:#082b72}
+.profile-goal h3,.room-page .profile-goal p{color:#082b72}
+.profile-goal-emoji{background:#dce9ff;box-shadow:inset 0 0 0 1px #b8d0ff}
+.profile-goal-family,.profile-goal-knowledge{border-top-color:#75adff}
+.live-goal{border:1px solid #a6c8ff;box-shadow:0 8px 22px #001b5930}
+.live-goal-emoji{background:#fff;color:#082b72;box-shadow:0 4px 12px #001b5930}
+.room-page .vote-self{background:#123477;color:#d9e7ff;border-color:#91b1e9;box-shadow:none;opacity:1}
+.room-page .vote-empty-note{background:#fff;color:#082b72;border-left:5px solid #ff75a5;border-radius:12px;padding:18px;text-align:left}
+@media(prefers-reduced-motion:reduce){.room-page button,#admin-panel button{transition:none}}
