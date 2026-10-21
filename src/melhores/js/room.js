@@ -3,16 +3,11 @@ import {createMeetingSound} from './sound.js';
 import '../css/room.css';
 import '../css/brand.css';
 const root = document.getElementById('weekly-room');
+import {createAppearance} from './palettes.js';
 const themeControl=document.createElement('div');
-themeControl.className='theme-control';
-themeControl.innerHTML='<label for="melhores-theme">🎨 Aparência</label><select id="melhores-theme"><option value="light">☀️ Tema claro</option><option value="dark">🌙 Tema escuro</option></select>';
-root.before(themeControl);
+themeControl.className='theme-control';root.before(themeControl);
+const appearance=createAppearance(themeControl, async value=>api('auth',{action:'appearance',appearance:value}));
 const meetingSound=createMeetingSound(themeControl);
-const themeSelect=themeControl.querySelector('select');
-let savedTheme;try{savedTheme=localStorage.getItem('melhores_theme');}catch{}
-themeSelect.value=['light','dark'].includes(savedTheme)?savedTheme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-function applyTheme(){document.documentElement.dataset.theme=themeSelect.value;try{localStorage.setItem('melhores_theme',themeSelect.value);}catch{}}
-themeSelect.addEventListener('change',applyTheme);applyTheme();
 document.addEventListener('click',event=>{const b=event.target.closest('button');if(!b||b.disabled||!b.closest('#weekly-room'))return;b.classList.remove('button-feedback');void b.offsetWidth;b.classList.add('button-feedback');});
 
 const photo = url => { try { return (new URL(url).protocol === 'https:' || /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url)) ? `<img class="room-avatar" src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : ''; } catch { return ''; } };
@@ -62,6 +57,7 @@ function login() {
 }
 async function shell() {
   window.melhoresUser = user;
+  appearance.load(user);
   currentView=user.role==='admin'?'room':'profile';
   root.innerHTML = `<main class="room-page"><header class="room-header"><div><p class="room-eyebrow">AMPLIFY · BEST OF THE WEEK</p><p class="profile-brand">Best of the week ✨</p></div><nav><button id="room-logout" class="secondary">Sair</button></nav></header><p id="room-error" role="alert"></p><nav class="profile-tabs" aria-label="Minha área"><button data-profile-view="profile">👤 Meu perfil</button><button data-profile-view="room">💬 Sala da semana</button>${user.role==='admin'?'<button id="room-admin" data-profile-view="admin">⚙️ Administrador</button>':''}</nav><section id="room-profile"></section><section id="room-content"></section>${user.role==='admin'?'<section id="admin-panel" hidden></section>':''}</main>`;
   document.getElementById('room-logout').onclick = async () => {

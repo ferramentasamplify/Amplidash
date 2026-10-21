@@ -302,3 +302,15 @@ test('self access requires current password, changes only signed-in account and 
  const next=await authRequest(request('',{username:'ana-new',password:'new-password-123'}),store);assert.equal(next.status,200);assert.equal(next.body.user.role,'participant');
  assert.equal(JSON.stringify(next.body).includes(ana.hash),false);
 });
+
+test('appearance is validated and stored only for the authenticated account',async()=>{
+ const store=new Store(),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const appearance={mode:'dark',palette:'custom',primary:'#123abc',accent:'#ff9977'};
+ assert.equal((await authRequest(request('',{action:'appearance',appearance}),store)).status,401);
+ assert.equal((await authRequest(request(ana,{action:'appearance',appearance:{...appearance,primary:'url(evil)'}}),store)).status,400);
+ assert.equal((await authRequest(request(ana,{action:'appearance',appearance,userId:'bruno'}),store)).status,200);
+ assert.deepEqual((await authRequest(request(ana,null,'GET'),store)).body.user.appearance,appearance);
+ assert.equal((await authRequest(request(bruno,null,'GET'),store)).body.user.appearance,null);
+ const again=await login(store,'ana');
+ assert.deepEqual((await authRequest(request(again,null,'GET'),store)).body.user.appearance,appearance);
+});

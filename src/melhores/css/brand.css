@@ -136,3 +136,13 @@ html[data-theme] .room-page .room-card,html[data-theme] .room-page .profile-goal
 .meeting-notice small{font-size:12px;font-weight:400}
 .sound-test{border:1px solid #7d9fce;border-radius:12px;background:#173861;color:#fff;padding:10px 12px;font:600 13px 'Work Sans',sans-serif;cursor:pointer}
 html[data-theme=light] .sound-test{background:#c7dcfb;color:#082b72}.theme-control{flex-wrap:wrap}
+/* Account palettes: surfaces adapt to the chosen mode; text retains readable contrast. */
+html[data-palette]{--palette-ink:#10223b;--palette-text:#f4f7ff;--meeting-edge:color-mix(in srgb,var(--user-primary),white 38%);--meeting-surface:linear-gradient(135deg,color-mix(in srgb,var(--user-primary),#101722 77%),#101722)}
+html[data-palette][data-theme=light]{--palette-text:#10223b;--meeting-surface:linear-gradient(135deg,color-mix(in srgb,var(--user-primary),white 86%),color-mix(in srgb,var(--user-accent),white 88%))}
+html[data-palette] body{background:radial-gradient(ellipse at top right,color-mix(in srgb,var(--user-primary),transparent 45%),transparent 65%),#0b1424}
+html[data-palette][data-theme=light] body{background:linear-gradient(135deg,color-mix(in srgb,var(--user-primary),white 76%),color-mix(in srgb,var(--user-accent),white 85%))}
+html[data-palette] .room-page button:not(.secondary):not([disabled]),html[data-palette] #admin-panel button:not([disabled]){background:linear-gradient(135deg,color-mix(in srgb,var(--user-primary),#000 25%),color-mix(in srgb,var(--user-primary),#000 40%));color:#fff;border-color:var(--user-accent)}
+html[data-palette] .profile-cover,html[data-palette] .winner-card,html[data-palette] .ending-card{background:linear-gradient(135deg,color-mix(in srgb,var(--user-primary),#000 25%),color-mix(in srgb,var(--user-primary),#000 50%));color:#fff}
+html[data-palette] .profile-goal{border-top:4px solid var(--user-accent)}
+html[data-palette] .room-story,html[data-palette] .vote-story,html[data-palette] .live-goal-text,html[data-palette] .vote-candidate,html[data-palette] .vote-dialog,html[data-palette] .profile-tabs{background:var(--meeting-surface);border-color:var(--meeting-edge);color:var(--palette-text)!important}
+.theme-control label{display:inline-flex;align-items:center;gap:6px}.theme-control input[type=color]{width:44px;height:36px;padding:2px;border-radius:8px}.theme-control #custom-colors:not([hidden]){display:inline-flex;gap:12px;flex-wrap:wrap}#appearance-status{font-size:12px}

@@ -10,7 +10,7 @@ export async function users(store) {
   const deleted=store?await store.get('deleted-accounts',{type:'json'}):[];
   return list.filter(u=>!(deleted||[]).includes(u.id)).map(u => ({ ...u, role: u.id === 'alexandre-neto' ? 'admin' : 'participant' }));
 }
-export function publicUser(u) { return { id: u.id, name: u.name, username: u.username, role: u.role, participantId:u.participantId||u.id }; }
+export function publicUser(u) { return { id: u.id, name: u.name, username: u.username, role: u.role, participantId:u.participantId||u.id, appearance:u.appearance||null }; }
 export function sameOrigin(request) {
   const h = request.headers || {};
   const origin = h.origin || h.Origin;
@@ -60,6 +60,15 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
       const key = sessionKey(request);
       if (key) await store.delete(key);
       return json({ ok: true }, 200, { 'Set-Cookie': cookie('') + '; Max-Age=0' });
+    }
+    if (body.action === 'appearance') {
+      const signed=await authenticate(request,store);
+      if(!signed)return json({ok:false,error:'Entre na sua conta.'},401);
+      const a=body.appearance;
+      if(!a||!['light','dark'].includes(a.mode)||!['amplify','ocean','forest','violet','sunset','rose','custom'].includes(a.palette)||!/^#[0-9a-f]{6}$/i.test(a.primary)||!/^#[0-9a-f]{6}$/i.test(a.accent))return json({ok:false,error:'Cores inválidas.'},400);
+      const appearance={mode:a.mode,palette:a.palette,primary:a.primary,accent:a.accent};
+      await update(store,'accounts',current=>{const list=current||JSON.parse(process.env.MELHORES_USERS_JSON||'[]');const account=list.find(u=>u.id===signed.id);if(!account)throw new Error('Conta não encontrada');account.appearance=appearance;return list;});
+      return json({ok:true,appearance});
     }
     if (body.action === 'self-access') {
       const signed=await authenticate(request,store);
