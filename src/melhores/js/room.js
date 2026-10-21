@@ -19,7 +19,7 @@ let draftRevision = 0;
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
 let previousRoom=null,actionRevision=0;
 function changeView(view){
- if(view!=='room')document.querySelector('.meeting-ending[open]')?.close();
+ if(view!=='room'){document.querySelector('.meeting-ending[open]')?.close();endingRoom=null;}
  if(view!=='room')meetingSound.stop();
  if(view==='admin'&&user.role!=='admin')return;
  currentView=view;document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
