@@ -125,3 +125,54 @@ test('actual installed Netlify SDK sends conditional headers and retries concurr
  await Promise.all(ids.map(id=>update(store,'room',old=>({members:[...old.members,id]}))));
  assert.deepEqual(data.members.slice().sort(),ids.slice().sort());assert.equal(seen[0].fresh,'*');assert.ok(seen.slice(1).every(h=>h.match));
 });
+
+test('live votes reject self-votes, hide ballots, require admin tie-break; goals and scores are idempotent',async()=>{
+ const store=new Store(),gameStore=new Store();await gameStore.setJSON('game-state',structuredClone(game));
+ const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body,body?'POST':'GET'),{store,game,gameStore});
+ const created=await call(admin,{action:'create'}),roomId=created.body.room.id;
+ const act=(cookie,action,extra={})=>call(cookie,{action,roomId,...extra});
+ await act(admin,'join');await act(ana,'join');await act(bruno,'join');
+ assert.equal((await call(ana)).body.profile.categories,undefined);
+ assert.ok((await call(admin)).body.room.members.every(m=>m.online));
+ await act(admin,'start');
+ for(const [cookie,name] of [[admin,'Alexandre'],[ana,'Ana'],[bruno,'Bruno']])await act(cookie,'save',{best:name+' best',worst:name+' worst',revision:1,done:true});
+ await act(admin,'present');assert.equal((await act(admin,'vote-best')).status,409);
+ await act(admin,'next');await act(admin,'next');await act(admin,'vote-best');
+ assert.equal((await act(ana,'vote',{target:'ana'})).status,400);
+ assert.equal((await act(admin,'vote',{target:'alexandre-neto'})).status,400);
+ await act(admin,'vote',{target:'ana'});await act(ana,'vote',{target:'bruno'});
+ const pending=await call(bruno);assert.equal(pending.body.room.votes,undefined);assert.equal(pending.body.room.results.best,undefined);
+ await act(bruno,'vote',{target:'alexandre-neto'});
+ assert.equal((await call(ana)).body.room.phase,'tie-best');
+ assert.equal((await act(ana,'resolve',{target:'ana'})).status,403);
+ await act(admin,'resolve',{target:'ana'});await act(admin,'vote-worst');
+ await act(admin,'vote',{target:'bruno'});await act(ana,'vote',{target:'bruno'});await act(bruno,'vote',{target:'ana'});
+ assert.equal((await call(admin)).body.room.phase,'result-worst');
+ await act(admin,'goals');
+ assert.equal((await act(ana,'mark',{target:'alexandre-neto',category:'familia',result:'done'})).status,403);
+ assert.equal((await act(admin,'mark',{target:'alexandre-neto',category:'familia',result:'absent'})).status,400);
+ for(const id of ['alexandre-neto','ana','bruno']){
+   assert.equal((await act(admin,'next-goal')).status,409);
+   if(id==='bruno')await store.setJSON(`presence/${roomId}/${id}`,{seen:Date.now()-60000});
+   for(const category of ['exercicio','familia','alimentacao','hobbies','conhecimentos'])assert.equal((await act(admin,'mark',{target:id,category,result:id==='bruno'?'absent':id==='ana'?'missed':'done'})).status,200);
+   await act(admin,'next-goal');
+ }
+ await act(admin,'close');const scored=await gameStore.get('game-state');
+ assert.equal(scored.participants.find(p=>p.id==='alexandre-neto').categories.familia,1);
+ assert.equal(scored.participants.find(p=>p.id==='ana').categories.bestWeek,1);
+ assert.equal(scored.participants.find(p=>p.id==='bruno').categories.familia,-1);
+ assert.equal(scored.participants.find(p=>p.id==='bruno').categories.bestWeek,1);
+ await call(admin);assert.deepEqual(await gameStore.get('game-state'),scored);
+});
+
+test('presence expires independently from completion; same login reconnects to current stage',async()=>{
+ const store=new Store(),admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const call=(cookie,body)=>roomRequest(request(cookie,body,body?'POST':'GET'),{store,game});
+ const roomId=(await call(admin,{action:'create'})).body.room.id;
+ await call(ana,{action:'join',roomId});await call(admin,{action:'start',roomId});
+ await call(ana,{action:'save',roomId,best:'best',worst:'worst',done:true,revision:1});
+ await store.setJSON(`presence/${roomId}/ana`,{seen:Date.now()-60000});
+ let member=(await call(admin)).body.room.members[0];assert.equal(member.online,false);assert.equal(member.done,true);
+ const rejoined=await login(store,'ana');member=(await call(rejoined)).body.room.members[0];assert.equal(member.online,true);assert.equal(member.draft.best,'best');
+});

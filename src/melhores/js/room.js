@@ -44,15 +44,17 @@ async function shell() {
       if(b.dataset.roomAction==='present' && !confirm('Encerrar a escrita e começar a apresentação? Os participantes não poderão mais editar.'))return;
       if(b.dataset.roomAction==='close' && !confirm('Encerrar esta sala? Os relatos serão preservados.'))return;
       await save(false);
-      state=await api('room',{action:b.dataset.roomAction, roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{})});
+      state=await api('room',{action:b.dataset.roomAction, roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result});
       render();
+      if(b.dataset.roomAction==='close' && adminLoaded) location.reload();
     }catch(e){error(e.message);}finally{b.disabled=false;}
   });
   await poll();setInterval(poll,2500);setInterval(tick,250);
 }
+function choice(action,label,attrs={}) { return `<button data-room-action="${action}" ${Object.entries(attrs).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>${esc(label)}</button>`; }
 function button(action,label,seconds='') { return `<button data-room-action="${action}" ${seconds?`data-seconds="${seconds}"`:''}>${label}</button>`; }
 async function poll(){
-  if(polling||document.hidden)return;polling=true;
+  if(polling)return;polling=true;
   try{state=await api('room'); offset=state.serverTime-Date.now();render();}catch(e){error(e.message);}finally{polling=false;}
 }
 function render(){
@@ -76,10 +78,26 @@ function render(){
   }
   const joined=room?.members.some(m=>m.id===user.id);
   document.getElementById('room-status').innerHTML = !room?'<h2>A próxima história começa aqui</h2><p>Aguarde o administrador abrir a sala da semana.</p>':room.phase==='waiting'?'<p class="room-eyebrow">SALA DE ESPERA</p><h2>Chegou a hora de compartilhar</h2><p>Entre e aguarde o administrador iniciar os 5 minutos.</p>':room.phase==='writing'?'<p class="room-eyebrow">HORA DE ESCREVER</p><div id="room-clock" class="room-clock" role="timer"></div><p id="room-clock-hint"></p>':room.phase==='presenting'?'<p class="room-eyebrow">VAMOS OUVIR</p><h2>Uma história de cada vez</h2><p>Sem pressa: a apresentação não tem cronômetro.</p>':'<h2>Encontro encerrado</h2><p>Os relatos foram preservados. Até a próxima semana!</p>';
-  document.getElementById('room-controls').innerHTML=(!room||room.phase==='closed')?(admin?button('create','Criar sala da semana'):''): (room.phase==='waiting'?(!joined?button('join','Entrar na sala'):'<span>Você está na sala ✓</span>')+(admin?button('start','Iniciar os 5 minutos'):''):'')+(admin?(room.phase==='writing'?button('extend','+1 minuto',60)+button('extend','+5 minutos',300)+button('present','Iniciar apresentação'):'')+(room.phase==='presenting'&&room.current<room.members.length-1?button('next','Próxima pessoa'):'')+button('close','Encerrar sala'):'');
-  document.getElementById('room-members').innerHTML=(room?.members||[]).map(m=>`<li>${photo(m.photoUrl)}<span>${esc(m.name)}</span><small>${m.done?'✓ Terminou':room.phase==='writing'?'Escrevendo…':'Na sala'}</small></li>`).join('')||'<li>Ninguém entrou ainda.</li>';
+  document.getElementById('room-controls').innerHTML=(!room||room.phase==='closed')?(admin?button('create','Criar sala da semana'):''): (room.phase==='waiting'?(!joined?button('join','Entrar na sala'):'<span>Você está na sala ✓</span>')+(admin?button('start','Iniciar os 5 minutos'):''):'')+(admin?(room.phase==='writing'?button('extend','+1 minuto',60)+button('extend','+5 minutos',300)+button('present','Iniciar apresentação'):'')+(room.phase==='presenting'?(room.current<room.members.length-1?button('next','Próxima pessoa'):button('vote-best','Abrir votação do melhor')):'')+(room.phase==='result-best'?button('vote-worst','Abrir votação do pior'):'')+(room.phase==='result-worst'?button('goals','Iniciar metas pessoais'):'')+button('close','Encerrar sala'):'');
+  document.getElementById('room-members').innerHTML=(room?.members||[]).map(m=>`<li>${photo(m.photoUrl)}<span>${esc(m.name)}</span><small>${!m.online?'Desconectado':m.done?'Na sala · ✓ Terminou':room.phase==='writing'?'Na sala · Escrevendo…':'Na sala'}</small></li>`).join('')||'<li>Ninguém entrou ainda.</li>';
   const stage=document.getElementById('room-stage');
-  if(room?.phase==='presenting'){
+  const labels={exercicio:'Exercício',familia:'Família',alimentacao:'Alimentação',hobbies:'Hobbies',conhecimentos:'Conhecimentos'};
+  if(room && /^(voting|tie|result)-/.test(room.phase)) {
+    const kind=room.phase.endsWith('-best')?'best':'worst',field=kind==='best'?'best':'worst',title=kind==='best'?'melhor':'pior';
+    document.getElementById('room-status').innerHTML=`<h2>Votação do ${title} da semana</h2><p>Ninguém pode votar em si mesmo.</p>`;
+    const result=room.results?.[kind];
+    stage.innerHTML=room.phase.startsWith('voting-')?`<p>${room.voteCount} de ${room.electorate.length} votos recebidos. ${room.voted?'Seu voto foi registrado.':''}</p>`:'';
+    stage.innerHTML+=room.members.map(m=>`<section><h3>${esc(m.name)}</h3><p class="room-story">${esc(m.draft?.[field]||'Não preenchido.')}</p>${room.phase.startsWith('voting-')&&!room.voted&&room.electorate.includes(user.id)&&m.id!==user.id?choice('vote','Votar em '+m.name,{target:m.id}):''}${result?`<p>${result.counts[m.id]} voto(s)</p>`:''}</section>`).join('');
+    if(room.phase.startsWith('tie-')) stage.innerHTML+='<h3>Empate: aguardando decisão do administrador</h3>'+(admin?result.tied.map(id=>choice('resolve','Escolher '+room.members.find(m=>m.id===id).name,{target:id})).join(''):'');
+    if(room.phase.startsWith('result-')) stage.innerHTML+=`<h3>Vencedor: ${esc(room.members.find(m=>m.id===result.winner)?.name)} · +1 ponto</h3>`;
+  }else if(room?.phase==='goals'){
+    const person=room.members[room.current],marked=room.goalResults?.[person.id]||{};
+    document.getElementById('room-status').innerHTML=`<h2>É a vez de ${esc(person.name)}</h2><p>Somente o administrador marca os resultados.</p>`;
+    stage.innerHTML=`<h2>${esc(person.name)}</h2>${!person.online?'<p>Desconectado — pode retornar com o mesmo login.</p>':''}`+Object.entries(labels).map(([key,label])=>`<section><h3>${label}</h3><p>${esc(person.objectives?.[key]||'Meta não preenchida.')}</p><p>${({done:'⭐ Cumpriu · +1',missed:'💩 Não cumpriu · 0',absent:'Ausente · −1'})[marked[key]]||'Aguardando avaliação'}</p>${admin?[['done','⭐ Cumpriu'],['missed','💩 Não cumpriu'],...(!person.online?[['absent','Ausente · −1']]:[])].map(([result,label])=>choice('mark',label,{target:person.id,category:key,result})).join(''):''}</section>`).join('')+(admin?button('next-goal',room.current===room.members.length-1?'Concluir metas':'Próxima pessoa'):'');
+  }else if(room?.phase==='completed'){
+    document.getElementById('room-status').innerHTML='<h2>Metas concluídas</h2><p>O administrador pode encerrar a sala para registrar a pontuação.</p>';
+    stage.innerHTML='<p>Obrigado por participar!</p>';
+  }else if(room?.phase==='presenting'){
     const person=room.members[room.current];
     stage.innerHTML=person?`<p class="room-eyebrow">${room.current+1} DE ${room.members.length}</p><h2>${esc(person.name)}</h2><h3>O melhor da semana</h3><p class="room-story">${esc(person.draft?.best||'Não preenchido.')}</p><h3>O pior da semana</h3><p class="room-story">${esc(person.draft?.worst||'Não preenchido.')}</p>`:'<p>Nenhum participante.</p>';
   }else if(room?.phase!=='writing'||!joined){
