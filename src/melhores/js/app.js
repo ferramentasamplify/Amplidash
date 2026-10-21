@@ -59,8 +59,7 @@ async function initializeAdminDashboard() {
   bindVotingEvents();
   await refreshDashboard('Carregando dados...');
 }
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeAdminDashboard);
-else queueMicrotask(() => initializeAdminDashboard().catch(e => { console.error(e); alert('Não foi possível carregar o painel: ' + e.message); }));
+// The room entry point awaits adminDashboardReady before exposing controls.
 
 function getButtonLabel(button) {
   return button?.querySelector('.btn-label');
@@ -2379,3 +2378,5 @@ async function openSavesPopup() {
 }
 
 window.openSavesPopup = openSavesPopup;
+
+export const adminDashboardReady = initializeAdminDashboard();

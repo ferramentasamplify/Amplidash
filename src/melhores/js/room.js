@@ -29,11 +29,13 @@ async function shell() {
   const toggle=document.getElementById('room-admin');
   if(toggle) toggle.onclick=async()=>{
     try {
-      const panel=document.getElementById('legacy-panel'); panel.hidden=!panel.hidden;
+      toggle.disabled=true;
+      const panel=document.getElementById('legacy-panel');
+      if(!adminLoaded){ toggle.textContent='Carregando painel…'; const app=await import('./app.js'); await app.adminDashboardReady; adminLoaded=true; }
+      panel.hidden=!panel.hidden;
       toggle.textContent=panel.hidden?'Painel adm':'Ocultar painel';
-      if(!adminLoaded){ await import('./app.js'); adminLoaded=true; }
       if(!panel.hidden) panel.scrollIntoView({behavior:'smooth'});
-    }catch(e){error(e.message);}
+    }catch(e){toggle.textContent='Painel adm';error(e.message);}finally{toggle.disabled=false;}
   };
   root.addEventListener('click', async e => {
     const b=e.target.closest('[data-room-action]');if(!b)return;

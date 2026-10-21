@@ -87,6 +87,7 @@ export async function authRequest(request, store = getStore({ name: 'melhores-pr
     const actual = scryptSync(password, salt, 64);
     const expected = Buffer.from(user?.hash || '00'.repeat(64), 'hex');
     if (!user || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return json({ ok: false, error: 'Login ou senha inválidos.' }, 401);
+    await store.delete(key); // Successful logins must not accumulate toward the failure limit.
     const token = randomBytes(32).toString('hex');
     await store.setJSON('sessions/' + digest(token), { userId: user.id, expires: Date.now() + 12 * 3600e3, version: digest(user.hash) });
     return json({ ok: true, user: publicUser(user) }, 200, { 'Set-Cookie': cookie(token) + '; Max-Age=43200' });
