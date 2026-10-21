@@ -1,4 +1,5 @@
 import '../css/room.css';
+import '../css/brand.css';
 const root = document.getElementById('weekly-room');
 const photo = url => { try { return (new URL(url).protocol === 'https:' || /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url)) ? `<img class="room-avatar" src="${esc(url)}" alt="" referrerpolicy="no-referrer">` : ''; } catch { return ''; } };
 const initials=name=>{const parts=String(name||'').trim().split(/\s+/);return (parts.length>1?parts.slice(0,2).map(n=>n[0]).join(''):parts[0].slice(0,2)).toUpperCase();};

@@ -1,0 +1,53 @@
+/* Approved reference: royal blue, white and pink-red. Scoped to Melhores. */
+:root{--brand-blue:#0649d8;--brand-red:#e90050;--bg-primary:#073cae;--bg-secondary:#104fc6;--text-primary:#fff;--amplify-ink:#082b72;--amplify-muted:#dce8ff;--amplify-border:#ffffff38}
+body{background:radial-gradient(ellipse at top right,#2469f4,transparent 55%),linear-gradient(160deg,#0649d8,#07338e);color:#fff}
+.header{background:#073caeee}
+.room-page,.profile-brand{color:#fff!important}
+.room-card{background:linear-gradient(135deg,#1553c9,#0b3893);border-color:var(--amplify-border);box-shadow:0 14px 40px #001d5e30}
+.room-page p,.room-page small{color:var(--amplify-muted)}
+.room-eyebrow{color:#fff!important}
+.room-page button,#admin-panel button{background:var(--brand-red);color:#fff;border-color:#ffffff30}
+.room-page button:hover,#admin-panel button:hover{background:#ce0047}
+.room-page button.secondary,#admin-panel .admin-button-secondary{background:#ffffff12;color:#fff;border-color:#ffffff60}
+.room-page button.secondary:hover,#admin-panel .admin-button-secondary:hover{background:#ffffff24}
+.room-page input,.room-page textarea,#admin-panel input,#admin-panel textarea,#admin-panel select{background:#062d80;color:#fff;border-color:#83adf0}
+.room-page input:focus,.room-page textarea:focus,#admin-panel input:focus,#admin-panel textarea:focus,#admin-panel select:focus{outline-color:#fff}
+.room-page button:focus-visible,#admin-panel button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.profile-tabs{background:#06318b;border-color:var(--amplify-border)}
+.room-page .profile-tabs button{background:transparent;color:#e3edff}
+.room-page .profile-tabs button.active{background:#fff;color:var(--amplify-ink)}
+.profile-cover{background:radial-gradient(ellipse at 10% 10%,#ffffff22,transparent 60%),linear-gradient(115deg,#0649d8,#246cf2);color:#fff}
+.profile-cover>span:last-child{color:#fff}
+.profile-portrait{border-color:#1553c9;background:#fff;color:var(--amplify-ink)}
+.profile-portrait>span{color:var(--amplify-ink)}
+.profile-stats{border-color:var(--amplify-border)}
+.profile-stats strong,.profile-section-title,.room-clock{color:#fff}
+.profile-goal,.profile-win,.profile-room-invite,.profile-empty,.waiting-goals,.goals-how,.goals-person,.live-goal,.vote-candidate,.admin-rank-card{background:linear-gradient(130deg,#1957cd,#103d9d);border-color:var(--amplify-border)}
+.profile-goal-emoji,.live-goal-emoji{background:#ffffff15}
+.profile-win-date,.profile-win-story,.profile-goal p,.profile-room-invite p{color:var(--amplify-muted)}
+.profile-form-link{color:#fff}
+.room-story,.vote-story,.profile-win-story,.live-goal-text{background:#062f84;color:#fff}
+.vote-overlay,.gymrats-overlay{background:#001b59da;backdrop-filter:blur(8px)}
+.vote-dialog,.winner-card{background:radial-gradient(ellipse at top,#3b78eb66,transparent 70%),linear-gradient(140deg,#1454ca,#082e80);border-color:#ffffff70;color:#fff}
+.vote-avatar,.goals-person-avatar,.member-portrait,#admin-panel .admin-user-avatar,.admin-rank-avatar{background:#fff;color:var(--amplify-ink);border-color:#ffffff70}
+.vote-self{border-color:#ffffff45;background:#ffffff0b}
+.vote-winner{border-color:#ff8eb5}
+.winner-award,.winner-point{color:#fff!important}
+.winner-point{background:var(--brand-red);border-color:#ff8eb5}
+.meeting-ending{background:radial-gradient(ellipse at 20% 10%,#357bfa66,transparent 60%),linear-gradient(140deg,#0649d8,#072e86);color:#fff}
+#admin-panel{color:#fff}
+#admin-panel .admin-welcome{background:radial-gradient(ellipse at 95% 0,#ffffff18,transparent 55%),linear-gradient(125deg,#1559da,#0a389a)}
+#admin-panel .admin-stats>div{background:#062e8688;border-color:var(--amplify-border)}
+#admin-panel .admin-stats span,#admin-panel .admin-user-login,#admin-panel .admin-search-label,#admin-panel .admin-protected,#admin-panel .admin-goal-progress{color:var(--amplify-muted)}
+#admin-panel .admin-stats strong,#admin-panel .admin-goal-progress strong{color:#fff}
+#admin-panel .admin-user{background:linear-gradient(145deg,#1653c8,#0b3694);border-color:var(--amplify-border)}
+#admin-panel .is-admin{background:#ffffff18;color:#fff}
+#admin-panel .is-active{background:#063f32;color:#a9f5cc;border-color:#64d89b}
+#admin-panel .is-out{background:#6b1737;color:#ffd2e1;border-color:#ff8db3}
+#admin-panel .admin-button-danger{background:#ffffff08;color:#ffd2e1;border-color:#ff8db3}
+#admin-panel .admin-button-danger:hover{background:#91113e;color:#fff}
+#admin-panel .admin-progress-track{background:#04276e}
+#admin-panel .admin-progress-track span{background:#fff}
+.room-page #room-content>.room-card:first-child{background:radial-gradient(ellipse at top right,#3d80ff55,transparent 65%),linear-gradient(120deg,#1454ca,#0a3592);border-color:var(--amplify-border)}
+.rank-place,.category-leaders{color:#fff!important}
+.room-clock.urgent{color:#ffd1e1}.room-clock.expired{color:#ffabc8}
