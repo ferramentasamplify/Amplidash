@@ -110,8 +110,8 @@ function openingAnimation(){
 function receiveState(nextState){
  const next=nextState.room,finished=r=>r&&['completed','closed'].includes(r.phase);
  const watching=!!next&&!!previousRoom&&currentView==='room'&&next.id===previousRoom.id&&previousRoom.members?.some(m=>m.id===user.id&&m.online)&&next.members?.some(m=>m.id===user.id);
- if(watching&&!finished(previousRoom)&&finished(next))endingRoom=next.id;
  const hosting=!!next&&!!previousRoom&&currentView==='room'&&next.id===previousRoom.id&&next.administrator?.id===user.id;
+ if((watching||hosting)&&!finished(previousRoom)&&finished(next))endingRoom=next.id;
  if((watching||hosting)&&previousRoom.phase==='waiting'&&next.phase==='writing')openingAnimation();
  previousRoom=next;state=nextState;offset=state.serverTime-Date.now();
 }
@@ -120,7 +120,7 @@ async function poll(){
  try{const next=await api('room');if(!actionPending&&revision===actionRevision){receiveState(next);render();}}catch(e){error(e.message);}finally{polling=false;}
 }
 function render(){
-  meetingSound.update(state.room,!!state.room?.members.some(m=>m.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
+  meetingSound.update(state.room,(!!state.room?.members.some(m=>m.id===user.id)||state.room?.administrator?.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
   const room=state.room,admin=user.role==='admin'&&(!room?.administrator||room.administrator.id===user.id),host=esc(room?.administrator?.name||'Administrador'),content=document.getElementById('room-content');
   const key=(room?.id||'none')+':'+(room?.phase||'none')+':'+!!room?.members.some(m=>m.id===user.id);
   if(layout!==key){
