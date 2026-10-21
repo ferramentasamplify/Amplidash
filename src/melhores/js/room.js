@@ -48,7 +48,8 @@ async function api(endpoint, body) {
   if (!res.ok || !data.ok) throw new Error(data.error || 'Não foi possível concluir.');
   return data;
 }
-function error(message) { const e = document.getElementById('room-error'); if(e) e.textContent = message; }
+function error(message, source='action') { const e = document.getElementById('room-error'); if(e) {e.textContent = message;e.dataset.source=source;} }
+function clearPollingError(){const e=document.getElementById('room-error');if(e?.dataset.source==='poll')error('','poll');}
 function login() {
   root.innerHTML = `<main class="room-page"><section class="room-card room-login"><p class="room-eyebrow">AMPLIFY · SEXTA-FEIRA</p><h1>Best of the week</h1><p>Uma semana. Suas histórias. Nosso encontro.</p><form id="room-login"><label>Login<input name="username" autocomplete="username" required maxlength="100"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label><button>Entrar</button></form><p id="room-error" role="alert"></p></section></main>`;
   document.getElementById('room-login').onsubmit = async e => {
@@ -117,7 +118,7 @@ function receiveState(nextState){
 }
 async function poll(){
  if(polling||actionPending)return;polling=true;const revision=actionRevision;
- try{const next=await api('room');if(!actionPending&&revision===actionRevision){receiveState(next);render();}}catch(e){error(e.message);}finally{polling=false;}
+ try{const next=await api('room');if(!actionPending&&revision===actionRevision){receiveState(next);render();clearPollingError();}}catch(e){error(e.message==='Não foi possível acessar a sala. Tente novamente.'?'Não foi possível atualizar os dados. Verificando a conexão novamente…':e.message,'poll');}finally{polling=false;}
 }
 function render(){
   meetingSound.update(state.room,(!!state.room?.members.some(m=>m.id===user.id)||state.room?.administrator?.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
