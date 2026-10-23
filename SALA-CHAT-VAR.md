@@ -17,3 +17,10 @@
 
 ## Publicação
 Mudanças preparadas em branch separada. Merge em main aciona o deploy automático do Netlify e deve ocorrer somente após aprovação do Alexandre. Sem nova chave de API ou migração manual: chat e VAR usam o armazenamento privado existente.
+
+## Modo teste
+- Somente o administrador da sessão pode habilitar/desabilitar, enquanto a sala aguarda início.
+- O modo fica fixo após começar; participantes não podem alterá-lo.
+- Sala sinalizada como teste; fluxo de apresentação, voto, VAR e metas permanece disponível.
+- Concluir ou encerrar não aplica pontos, penalidades, conquistas ou histórico oficial de fatos. Os dados da sala continuam separados do ranking.
+- 29 testes de servidor aprovados, incluindo conclusão/encerramento/releituras sem mutação da pontuação e histórico.

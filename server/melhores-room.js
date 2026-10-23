@@ -3,7 +3,7 @@ import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { authenticate, sameOrigin, users, json, update } from './melhores-auth.js';
-const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var'];
+const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var','test-mode'];
 const categories = ['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 export async function roomRequest(request, deps = {}) {
@@ -16,7 +16,7 @@ export async function roomRequest(request, deps = {}) {
     const body = request.body || {};
     if (request.method === 'POST') {
       const { action } = body;
-      if (['create','start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
+      if (['create','start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var','test-mode'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
       if (action === 'create') {
         const prior=await store.get('active-room',{type:'json'});
         if(prior?.phase==='completed')await store.setJSON('room-history/'+prior.id,prior);
@@ -61,7 +61,11 @@ export async function roomRequest(request, deps = {}) {
             const kind=action==='vote-worst'?'best':'worst';
             if(room.var?.[kind]?.pending)fail('O ADM precisa concluir o VAR antes de continuar.',409);
           }
-          if(action==='turn-next'){
+          if(action==='test-mode'){
+            if(room.phase!=='waiting')fail('O modo teste só pode mudar antes de iniciar a rodada.',409);
+            if(typeof body.enabled!=='boolean')fail('Informe se o modo teste deve ser habilitado.');
+            room.testMode=body.enabled;
+          }else if(action==='turn-next'){
             if(room.phase!=='presenting'||(!room.members.includes(user.id)&&user.role!=='admin')||(user.id!==room.members[room.current]&&user.id!==room.administratorId))fail('Somente a pessoa da vez ou o ADM pode avançar.',403);
             if(room.presentationFact!=='worst')room.presentationFact='worst';
             else if(room.current<room.members.length-1){room.current++;room.presentationFact='best';}
@@ -168,7 +172,7 @@ export async function roomRequest(request, deps = {}) {
     let game = deps.game || await profileStore.get('game-state',{type:'json'}) || {};
     const profile = (game.participants || []).find(p => p.id === user.participantId);
     if (!room) return json({ ok: true, user, profile:personalProfile(game,user), room: null, serverTime: Date.now() });
-    if (['completed','closed'].includes(room.phase) && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
+    if (room.testMode!==true && ['completed','closed'].includes(room.phase) && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
       const gameStore = deps.gameStore || getStore({name:'melhores-game',consistency:'strong'});
       const winnerFact=async(kind)=>{
         const accountId=room.results[kind].winner;

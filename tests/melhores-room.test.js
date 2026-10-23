@@ -441,3 +441,19 @@ test('participant with stale presence can still vote in an open ballot',async()=
  await store.setJSON('active-room',{id:'vote',phase:'voting-best',administratorId:'alexandre-neto',members:['ana','bruno'],electorate:['ana','bruno'],votes:{best:{},worst:{}},results:{}});
  const r=await roomRequest(request(ana,{action:'vote',roomId:'vote',target:'bruno'}),{store,game});assert.equal(r.status,200);assert.equal(r.body.room.voted,true);
 });
+
+test('only host can toggle test mode before start; finished test never changes scores or official history',async()=>{
+ const store=new Store(),gameStore=new Store();const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const original={participants:[{id:'ana',name:'Ana',categories:{familia:7},totalPoints:7}],weeklyFactHistory:[],appliedRooms:[]};await gameStore.setJSON('game-state',original);
+ const call=(cookie,body)=>roomRequest(request(cookie,body,body?'POST':'GET'),{store,gameStore});
+ let r=await call(admin,{action:'create'});const roomId=r.body.room.id;
+ assert.equal((await call(ana,{action:'test-mode',roomId,enabled:true})).status,403);
+ assert.equal((await call(admin,{action:'test-mode',roomId,enabled:'true'})).status,400);
+ assert.equal((await call(admin,{action:'test-mode',roomId,enabled:true})).body.room.testMode,true);
+ await call(ana,{action:'join',roomId});await call(admin,{action:'start',roomId});
+ assert.equal((await call(admin,{action:'test-mode',roomId,enabled:false})).status,409);
+ const room=await store.get('active-room');room.phase='completed';room.results={best:{winner:'ana'},worst:{winner:'ana'}};room.goalResults={ana:Object.fromEntries(['exercicio','familia','alimentacao','hobbies','conhecimentos'].map(k=>[k,'absent']))};await store.setJSON('active-room',room);
+ for(let i=0;i<2;i++)assert.equal((await call(admin)).status,200);
+ assert.deepEqual(await gameStore.get('game-state'),original);
+ room.phase='closed';await store.setJSON('active-room',room);await call(admin);assert.deepEqual(await gameStore.get('game-state'),original);
+});
