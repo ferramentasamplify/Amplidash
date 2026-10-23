@@ -3,7 +3,7 @@ import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 import { authenticate, sameOrigin, users, json, update } from './melhores-auth.js';
-const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'];
+const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var','test-mode'];
 const categories = ['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
 export async function roomRequest(request, deps = {}) {
@@ -16,13 +16,25 @@ export async function roomRequest(request, deps = {}) {
     const body = request.body || {};
     if (request.method === 'POST') {
       const { action } = body;
-      if (['create','start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
+      if (['create','start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var','test-mode'].includes(action) && user.role !== 'admin') fail('Acesso exclusivo do administrador.', 403);
       if (action === 'create') {
         const prior=await store.get('active-room',{type:'json'});
         if(prior?.phase==='completed')await store.setJSON('room-history/'+prior.id,prior);
         await update(store, 'active-room', old => {
           if (old && !['closed','completed'].includes(old.phase)) fail('Encerre a sala atual antes de criar outra.', 409);
           return { id: randomBytes(8).toString('hex'), phase: 'waiting', createdAt: new Date().toISOString(), administratorId: user.id, members: [], deadline: null, current: 0, votes: { best: {}, worst: {} }, results: {}, goalResults: {} };
+        });
+      } else if (action === 'chat') {
+        const room=await store.get('active-room',{type:'json'});
+        if(!room||room.id!==body.roomId||['closed','completed'].includes(room.phase)||(!room.members.includes(user.id)&&user.id!==room.administratorId))fail('Entre na sala para conversar.',403);
+        const text=typeof body.text==='string'?body.text.trim():'';
+        const gif=typeof body.gif==='string'?body.gif.trim():'';
+        if(text.length>1000||gif.length>2000||(!text&&!gif))fail('Envie texto de até 1.000 caracteres ou um GIF.');
+        if(gif){let url;try{url=new URL(gif);}catch{fail('Link de GIF inválido.');}
+          if(url.protocol!=='https:'||!['media.giphy.com','i.giphy.com','media.tenor.com'].includes(url.hostname)||!url.pathname.toLowerCase().endsWith('.gif')||url.username||url.password||url.port)fail('Use um link direto HTTPS de GIF do Giphy ou Tenor.');}
+        await update(store,'room-chat/'+room.id,old=>{const messages=old||[];
+          if(messages.some(m=>m.userId===user.id&&m.at>Date.now()-1500))fail('Aguarde um instante antes de enviar outra mensagem.',429);
+          return [...messages,{id:randomBytes(12).toString('hex'),userId:user.id,name:user.name,text,gif,at:Date.now()}].slice(-150);
         });
       } else if (action === 'save') {
         const room = await store.get('active-room', { type: 'json' });
@@ -44,7 +56,34 @@ export async function roomRequest(request, deps = {}) {
             room.administratorId ||= accounts.find(a => a.role === 'admin')?.id;
             if (room.administratorId !== user.id) fail('Somente o administrador desta sessão pode conduzir a reunião.', 403);
           }
-          if (action === 'join') {
+          if(['show-worst','next','turn-next'].includes(action)&&body.target&&body.target!==room.members[room.current])fail('A pessoa da vez mudou. Atualize a tela.',409);
+          if(['vote-worst','goals'].includes(action)){
+            const kind=action==='vote-worst'?'best':'worst';
+            if(room.var?.[kind]?.pending)fail('O ADM precisa concluir o VAR antes de continuar.',409);
+          }
+          if(action==='test-mode'){
+            if(room.phase!=='waiting')fail('O modo teste só pode mudar antes de iniciar a rodada.',409);
+            if(typeof body.enabled!=='boolean')fail('Informe se o modo teste deve ser habilitado.');
+            room.testMode=body.enabled;
+          }else if(action==='turn-next'){
+            if(room.phase!=='presenting'||(!room.members.includes(user.id)&&user.role!=='admin')||(user.id!==room.members[room.current]&&user.id!==room.administratorId))fail('Somente a pessoa da vez ou o ADM pode avançar.',403);
+            if(room.presentationFact!=='worst')room.presentationFact='worst';
+            else if(room.current<room.members.length-1){room.current++;room.presentationFact='best';}
+            else fail('Aguarde o ADM abrir a votação.',409);
+          }else if(action==='var'){
+            const kind=room.phase==='result-best'?'best':room.phase==='result-worst'?'worst':null;
+            if(!kind||(!room.members.includes(user.id)&&user.id!==room.administratorId))fail('O VAR só pode ser solicitado no resultado da rodada.',403);
+            const electorate=[...new Set([...room.members,room.administratorId])];
+            room.var||={};const review=room.var[kind]||={requests:[],threshold:Math.floor(electorate.length/2)+1,pending:false,resolved:false};
+            if(review.resolved)fail('O ADM já decidiu este VAR.',409);
+            if(!review.requests.includes(user.id))review.requests.push(user.id);
+            if(review.requests.length>=review.threshold)review.pending=true;
+          }else if(action==='resolve-var'){
+            const kind=room.phase==='result-best'?'best':room.phase==='result-worst'?'worst':null;
+            if(!kind||!room.var?.[kind]?.pending||!room.members.includes(body.target))fail('VAR ou participante inválido.',409);
+            room.var[kind].pending=false;room.var[kind].resolved=true;room.var[kind].decidedBy=user.id;
+            room.results[kind].winner=body.target;
+          }else if (action === 'join') {
             const hostJoiningWriting = room.phase === 'writing' && user.role === 'admin' && room.administratorId === user.id;
             if (room.phase !== 'waiting' && !hostJoiningWriting && !room.members.includes(user.id)) fail('A rodada já começou. Aguarde a próxima sala.', 409);
             if (!room.members.includes(user.id)) room.members.push(user.id);
@@ -69,18 +108,18 @@ export async function roomRequest(request, deps = {}) {
           } else if (action === 'vote-best' || action === 'vote-worst') {
             const kind = action === 'vote-best' ? 'best' : 'worst';
             if (kind === 'best' ? room.phase !== 'presenting' || room.current !== room.members.length-1 || room.presentationFact!=='worst' : room.phase !== 'result-best') fail('Conclua a etapa anterior.',409);
-            const eligible = room.members.filter(id => presence[id]?.seen > Date.now()-20000);
-            if (eligible.length < 2) fail('São necessárias pelo menos duas pessoas conectadas para votar.',409);
+            const eligible = [...room.members];
+            if (room.members.filter(id=>presence[id]?.seen>Date.now()-60000).length < 2) fail('São necessárias pelo menos duas pessoas conectadas para votar.',409);
             room.votes ||= {best:{},worst:{}}; room.results ||= {};
             room.electorate = eligible; room.phase = 'voting-'+kind;
           } else if (action === 'vote') {
             const kind = room.phase === 'voting-best' ? 'best' : room.phase === 'voting-worst' ? 'worst' : null;
             const hostVoting = user.role === 'admin' && room.administratorId === user.id;
-            if (!kind || (!room.electorate.includes(user.id) && !hostVoting)) fail('Você não participa desta votação.',403);
+            if (!kind || (!room.members.includes(user.id) && !hostVoting)) fail('Você não participa desta votação.',403);
             if (body.target === user.id) fail('Ninguém pode votar em si mesmo.',400);
             if (!room.members.includes(body.target)) fail('Participante inválido.');
             if (room.votes[kind][user.id]) fail('Seu voto já foi registrado.',409);
-            if (hostVoting && !room.electorate.includes(user.id)) room.electorate.push(user.id);
+            if (!room.electorate.includes(user.id)) room.electorate.push(user.id);
             room.votes[kind][user.id] = body.target;
             if (room.electorate.every(id => room.votes[kind][id])) {
               const counts = Object.fromEntries(room.members.map(id=>[id,0]));
@@ -133,7 +172,7 @@ export async function roomRequest(request, deps = {}) {
     let game = deps.game || await profileStore.get('game-state',{type:'json'}) || {};
     const profile = (game.participants || []).find(p => p.id === user.participantId);
     if (!room) return json({ ok: true, user, profile:personalProfile(game,user), room: null, serverTime: Date.now() });
-    if (['completed','closed'].includes(room.phase) && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
+    if (room.testMode!==true && ['completed','closed'].includes(room.phase) && room.results?.best?.winner && room.results?.worst?.winner && room.goalResults && room.members.every(id => categories.every(k=>room.goalResults[id]?.[k]))) {
       const gameStore = deps.gameStore || getStore({name:'melhores-game',consistency:'strong'});
       const winnerFact=async(kind)=>{
         const accountId=room.results[kind].winner;
@@ -178,10 +217,11 @@ export async function roomRequest(request, deps = {}) {
     }));
     // Raw ballots are never returned, even to the administrator. Results appear only after all votes.
     const {votes, ...publicRoom} = room;
+    const chat=room.members.includes(user.id)||room.administratorId===user.id?await store.get('room-chat/'+room.id,{type:'json'})||[]:[];
     const kind = room.phase.endsWith('-best') ? 'best' : 'worst';
     const voting = room.phase.startsWith('voting-');
     const safeProfile = personalProfile(game,user);
-    return json({ ok: true, user, profile:safeProfile, room: { ...publicRoom, administrator: (() => { const a = accounts.find(a => a.id === (room.administratorId || accounts.find(a => a.role === 'admin')?.id)); return a ? {id:a.id, name:a.name, username:a.username} : null; })(), members: rows,
+    return json({ ok: true, user, profile:safeProfile, room: { ...publicRoom, chat, administrator: (() => { const a = accounts.find(a => a.id === (room.administratorId || accounts.find(a => a.role === 'admin')?.id)); return a ? {id:a.id, name:a.name, username:a.username} : null; })(), members: rows,
       ...(voting ? {voted:!!votes?.[kind]?.[user.id], voteCount:Object.keys(votes?.[kind]||{}).length} : {}) }, serverTime: Date.now() });
   } catch (e) { console.error('[room]', e.message); return json({ ok: false, error: e.status ? e.message : 'Não foi possível acessar a sala. Tente novamente.' }, e.status || 503); }
 }

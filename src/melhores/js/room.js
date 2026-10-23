@@ -17,12 +17,12 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, actionPending = false, saving = Promise.resolve();
 let draftRevision = 0;
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
-let previousRoom=null,actionRevision=0;
+let previousRoom=null,actionRevision=0,voteLayout='',chatLayout='',turnKey='';
 function changeView(view){
  if(view!=='room'){document.querySelector('.meeting-ending[open]')?.close();endingRoom=null;}
  if(view!=='room')meetingSound.stop();
  if(view==='admin'&&user.role!=='admin')return;
- currentView=view;document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
+ currentView=view;document.getElementById('room-vote-portal')?.toggleAttribute('hidden',view!=='room'||!state?.room||!/^(voting|tie|result)-/.test(state.room.phase));document.body.classList.toggle('room-vote-open',view==='room'&&!!state?.room&&/^(voting|tie|result)-/.test(state.room.phase));if(document.getElementById('room-chat'))renderChat(state?.room);document.getElementById('admin-panel')?.toggleAttribute('hidden',view!=='admin');
  if(view!=='admin')document.getElementById('legacy-panel').hidden=true;
  document.getElementById('room-profile').hidden=view!=='profile';document.getElementById('room-content').hidden=view!=='room';
  document.querySelectorAll('[data-profile-view]').forEach(b=>{b.classList.toggle('active',b.dataset.profileView===view);b.setAttribute('aria-pressed',String(b.dataset.profileView===view));});
@@ -48,7 +48,7 @@ async function api(endpoint, body) {
   if (!res.ok || !data.ok) throw new Error(data.error || 'Não foi possível concluir.');
   return data;
 }
-function error(message, source='action') { const e = document.getElementById('room-error'); if(e) {e.textContent = message;e.dataset.source=source;} }
+function error(message, source='action') { const overlay=document.querySelector('#room-vote-portal .vote-overlay');if(overlay){let feedback=overlay.querySelector('.vote-error');if(!feedback){feedback=document.createElement('p');feedback.className='vote-error';feedback.setAttribute('role','alert');overlay.prepend(feedback);}feedback.textContent=message;} const e = document.getElementById('room-error'); if(e) {e.textContent = message;e.dataset.source=source;} }
 function clearPollingError(){const e=document.getElementById('room-error');if(e?.dataset.source==='poll')error('','poll');}
 function login() {
   root.innerHTML = `<main class="room-page"><section class="room-card room-login"><p class="room-eyebrow">AMPLIFY · SEXTA-FEIRA</p><h1>Best of the week</h1><p>Uma semana. Suas histórias. Nosso encontro.</p><form id="room-login"><label>Login<input name="username" autocomplete="username" required maxlength="100"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label><button>Entrar</button></form><p id="room-error" role="alert"></p></section></main>`;
@@ -81,6 +81,7 @@ async function shell() {
     actionPending=true;actionRevision++;b.disabled=true;error('');
     try {
       if(b.dataset.roomAction==='present' && !confirm('Encerrar a escrita e começar a apresentação? Os participantes não poderão mais editar.'))return;
+      if(b.dataset.roomAction==='test-mode'&&b.dataset.enabled==='false'&&!confirm('Desativar o modo teste? Esta sala passará a valer pontos quando concluída.'))return;
       if(b.dataset.roomAction==='close' && !confirm('Encerrar esta sala? Os relatos serão preservados.'))return;
       let gymrats;
       if(b.dataset.roomAction==='mark'&&b.dataset.category==='exercicio'&&b.dataset.result==='done')gymrats=await confirmGymrats();
@@ -89,12 +90,24 @@ async function shell() {
         b.closest('.live-goal-actions')?.querySelectorAll('button').forEach(el=>{el.dataset.pendingMark=el.dataset.result===result?'selected':'dim';});
       }
       await save(false);
-      receiveState(await api('room',{action:b.dataset.roomAction, ...(b.dataset.roomAction==='start'?{participate:true}:{}), roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})}));
+      receiveState(await api('room',{action:b.dataset.roomAction, ...(b.dataset.roomAction==='start'?{participate:true}:{}), roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),...(b.dataset.enabled?{enabled:b.dataset.enabled==='true'}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})}));
       if(b.dataset.roomAction==='join')currentView='room';
       render();
 
     }catch(e){error(e.message);}finally{actionPending=false;b.disabled=false;root.querySelectorAll('[data-pending-mark]').forEach(el=>el.removeAttribute('data-pending-mark'));}
   });
+  const portal=document.createElement('div');portal.id='room-vote-portal';portal.className='room-page';root.append(portal);
+  const chat=document.createElement('aside');chat.id='room-chat';chat.className='room-page room-chat';chat.hidden=true;
+  chat.innerHTML='<button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat da sala</button><section id="chat-panel" hidden><h2>Mensagens da sala</h2><div id="chat-messages" role="log" aria-label="Mensagens"></div><form id="chat-form"><label>Mensagem<input name="text" maxlength="1000" placeholder="Converse com o pessoal"></label><label>GIF do Giphy ou Tenor<input name="gif" type="url" maxlength="2000" placeholder="https://media.tenor.com/…/….gif"></label><p>Use um link direto .gif. Mensagens ficam nesta sala.</p><button type="button" id="chat-emoji" aria-label="Inserir emoji" aria-expanded="false">😊</button><div id="emoji-picker" hidden></div><button type="button" id="gif-toggle" aria-expanded="false">GIFs</button><div id="gif-picker" hidden></div><button type="submit">Enviar</button><p id="chat-error" role="status"></p></form></section>';root.append(chat);
+  document.getElementById('chat-toggle').onclick=()=>{const panel=document.getElementById('chat-panel');panel.hidden=!panel.hidden;document.getElementById('chat-toggle').setAttribute('aria-expanded',String(!panel.hidden));};
+  const emojis=document.getElementById('emoji-picker');emojis.innerHTML=['😊','😂','❤️','👏','🔥','🎉','😢','🙌','👀','⚽','🏆','🤔'].map(emoji=>`<button type="button" data-emoji="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
+  document.getElementById('chat-emoji').onclick=()=>{emojis.hidden=!emojis.hidden;document.getElementById('chat-emoji').setAttribute('aria-expanded',String(!emojis.hidden));};
+  emojis.onclick=e=>{const b=e.target.closest('[data-emoji]');if(b){chat.querySelector('[name=text]').value+=' '+b.dataset.emoji;chat.querySelector('[name=text]').focus();}};
+  const gifs=[['Comemorar','g9582DNuQppxC'],['Aplausos','l3q2XhfQ8oCkm1Ts4'],['Risada','10JhviFuU2gWD6'],['Surpresa','5VKbvrjxpVJCM']];
+  const picker=document.getElementById('gif-picker');picker.innerHTML=gifs.map(([label,id])=>`<button type="button" data-gif="https://media.giphy.com/media/${id}/giphy.gif" aria-label="Selecionar GIF: ${label}"><img src="https://media.giphy.com/media/${id}/giphy.gif" alt="${label}" loading="lazy" referrerpolicy="no-referrer"></button>`).join('');
+  document.getElementById('gif-toggle').onclick=()=>{picker.hidden=!picker.hidden;document.getElementById('gif-toggle').setAttribute('aria-expanded',String(!picker.hidden));};
+  picker.onclick=e=>{const b=e.target.closest('[data-gif]');if(b){chat.querySelector('[name=gif]').value=b.dataset.gif;picker.hidden=true;document.getElementById('gif-toggle').setAttribute('aria-expanded','false');document.getElementById('chat-error').textContent='GIF selecionado. Clique em Enviar.';}};
+  document.getElementById('chat-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;document.getElementById('chat-error').textContent='';try{const data=new FormData(f);const next=await api('room',{action:'chat',roomId:state.room.id,text:data.get('text'),gif:data.get('gif')});f.reset();receiveState(next);render();}catch(e){document.getElementById('chat-error').textContent=e.message;}finally{b.disabled=false;}};
   await poll();setInterval(poll,1200);setInterval(tick,250);
 }
 function choice(action,label,attrs={}) { return `<button data-room-action="${action}" ${Object.entries(attrs).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>${esc(label)}</button>`; }
@@ -120,6 +133,14 @@ async function poll(){
  if(polling||actionPending)return;polling=true;const revision=actionRevision;
  try{const next=await api('room');if(!actionPending&&revision===actionRevision){receiveState(next);render();clearPollingError();}}catch(e){error(e.message==='Não foi possível acessar a sala. Tente novamente.'?'Não foi possível atualizar os dados. Verificando a conexão novamente…':e.message,'poll');}finally{polling=false;}
 }
+function renderChat(room){
+ const chat=document.getElementById('room-chat');if(!chat)return;
+ chat.hidden=currentView!=='room'||!room||['closed','completed'].includes(room.phase)||(!room.members.some(m=>m.id===user.id)&&room.administratorId!==user.id);
+ const key=JSON.stringify([room?.id,room?.chat]);if(key===chatLayout)return;chatLayout=key;
+ const list=document.getElementById('chat-messages');const bottom=list.scrollHeight-list.scrollTop-list.clientHeight<60;
+ list.innerHTML=(room?.chat||[]).map(m=>`<article><strong>${esc(m.name)}</strong><time>${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time><p>${esc(m.text)}</p>${m.gif?`<img src="${esc(m.gif)}" alt="GIF enviado por ${esc(m.name)}" loading="lazy" referrerpolicy="no-referrer">`:''}</article>`).join('')||'<p>Comece a conversa.</p>';
+ if(bottom)list.scrollTop=list.scrollHeight;
+}
 function render(){
   meetingSound.update(state.room,(!!state.room?.members.some(m=>m.id===user.id)||state.room?.administrator?.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
   const room=state.room,admin=user.role==='admin'&&(!room?.administrator||room.administrator.id===user.id),host=esc(room?.administrator?.name||'Administrador'),content=document.getElementById('room-content');
@@ -141,8 +162,16 @@ function render(){
     }
   }
   const joined=room?.members.some(m=>m.id===user.id);
+  const votingScreen=!!room&&/^(voting|tie|result)-/.test(room.phase);
+  document.body.classList.toggle('room-vote-open',votingScreen&&currentView==='room');
+  if(!votingScreen){document.getElementById('room-vote-portal').innerHTML='';voteLayout='';}
+  document.getElementById('room-vote-portal').hidden=!votingScreen||currentView!=='room';
   document.getElementById('room-status').innerHTML = !room?`<p class="room-eyebrow">📅 THE BEST · NOSSO ENCONTRO</p><h2>Ainda não iniciamos</h2><div class="meeting-notice" data-meeting-notice>${meetingNotice(Date.now()+offset)}</div><p>A sala ainda não foi criada. Aguarde o administrador abrir o encontro.</p>`:room.phase==='waiting'?`<p class="room-eyebrow">💬 NOSSO PONTO DE ENCONTRO</p><h2>Chegou a hora de compartilhar ✨</h2><p>Entre, se acomode e aguarde ${host} iniciar os 5 minutos. Cada história tem seu espaço por aqui. 🌱</p>`:room.phase==='writing'?'<p class="room-eyebrow">HORA DE ESCREVER</p><div id="room-clock" class="room-clock" role="timer"></div><p id="room-clock-hint"></p>':room.phase==='presenting'?'<p class="room-eyebrow">VAMOS OUVIR</p><h2>Uma história de cada vez</h2><p>Sem pressa: a apresentação não tem cronômetro.</p>':'<h2>Encontro encerrado</h2><p>Os relatos foram preservados. Até a próxima semana!</p>';
   document.getElementById('room-controls').innerHTML=(!room||room.phase==='closed')?(admin?button('create','Criar sala da semana'):''): (room.phase==='waiting'?(!joined?button('join','Entrar na sala'):'<span>Você está na sala ✓</span>')+(admin?button('start','🎬 Iniciar Best of the Week'):''):'')+(admin?(room.phase==='writing'?(!joined?button('join','✍️ Participar e escrever meu melhor e pior'):'')+button('extend','+1 minuto',60)+button('extend','+5 minutos',300)+button('present','Iniciar apresentação'):'')+(room.phase==='presenting'?(room.presentationFact!=='worst'?button('show-worst','🌧️ Mostrar o pior fato →'):room.current<room.members.length-1?button('next','Próxima pessoa →'):button('vote-best','🗳️ Abrir votação do melhor')):'')+button('close','Encerrar sala'):'');
+  if(room?.phase==='waiting'&&admin)document.getElementById('room-controls').insertAdjacentHTML('beforeend',choice('test-mode',room.testMode?'Desabilitar modo teste':'Habilitar modo teste',{enabled:!room.testMode}));
+  if(room?.testMode){
+    const banner=document.createElement('p');banner.className='test-mode-banner';banner.setAttribute('role','status');banner.textContent='MODO TESTE · Sem pontos, penalidades ou histórico oficial';document.getElementById('room-status').prepend(banner);
+  }
   document.getElementById('room-members').innerHTML=(room?.members||[]).map(m=>`<li>${avatar(m.photoUrl,m.name)}<span>${esc(m.name)}</span><small>${!m.online?'Desconectado':m.done?'Na sala · ✓ Terminou':room.phase==='writing'?'Na sala · Escrevendo…':'Na sala'}</small></li>`).join('')||'<li>Ninguém entrou ainda.</li>';
   const stage=document.getElementById('room-stage');
   stage.closest('.room-columns').hidden=!room;
@@ -151,18 +180,31 @@ function render(){
   if(room?.phase==='presenting' && room.members.filter(m=>m.online).length<2) document.getElementById('room-controls').insertAdjacentHTML('beforeend','<p class="vote-empty-note" role="status">👥 Para abrir a votação, pelo menos duas pessoas precisam estar conectadas. Ninguém pode votar em si mesmo.</p>');
   if(room && /^(voting|tie|result)-/.test(room.phase)) {
     const kind=room.phase.endsWith('-best')?'best':'worst',field=kind==='best'?'best':'worst',title=kind==='best'?'melhor':'pior';
-    document.getElementById('room-status').innerHTML=`<h2>Votação do ${title} da semana</h2><p>Ninguém pode votar em si mesmo.</p>`;
+    document.getElementById('room-status').innerHTML=`<h2>Votação do ${title} da semana</h2><p>Ninguém pode votar em si mesmo.</p>${room.testMode?'<p class="test-mode-banner">MODO TESTE · Sem pontuação</p>':''}`;
     const result=room.results?.[kind];
     const isVoting=room.phase.startsWith('voting-');
     const portraits=m=>{const parts=m.name.trim().split(/\s+/);const initials=(parts.length>1?parts.slice(0,2).map(n=>n[0]).join(''):parts[0].slice(0,2)).toUpperCase();return `<div class="vote-avatar">${photo(m.photoUrl)||`<span>${esc(initials)}</span>`}</div>`;};
-    const voteButton=m=>m.id===user.id?'<button disabled class="vote-self">Seu perfil · voto próprio bloqueado</button>':room.voted?'<button disabled>Voto já registrado ✓</button>':(room.electorate.includes(user.id)||(admin&&room.administratorId===user.id))?choice('vote','Votar em '+m.name,{target:m.id}):'';
-    stage.innerHTML=`<section class="vote-overlay" role="dialog" aria-modal="true" aria-labelledby="vote-heading"><div class="vote-dialog"><header><p class="room-eyebrow">🗳️ HORA DE ESCOLHER</p><h1 id="vote-heading" tabindex="-1">Votação do ${title} fato da semana</h1><p>${isVoting?'Leia os relatos e escolha uma pessoa. Ninguém pode votar em si mesmo.':'Confira o resultado desta rodada.'}</p>${isVoting?`<p class="vote-progress">${room.voteCount} de ${room.electorate.length} votos recebidos ${room.voted?'· Seu voto foi registrado ✓':''}</p>`:''}</header>${isVoting&&room.members.length<2?'<p class="vote-empty-note" role="status">👥 Para votar, precisamos de pelo menos duas pessoas na sala. Ninguém pode votar em si mesmo. Este teste sozinho não permite registrar voto.</p>':''}<div class="vote-candidates">${room.members.map(m=>`<article class="vote-candidate ${m.id===user.id?'is-me':''}">${portraits(m)}<h2>${esc(m.name)}${m.id===user.id?' <small>(você)</small>':''}</h2><p class="vote-story">${esc(m.draft?.[field]||'Relato não preenchido.')}</p>${isVoting?voteButton(m):`<p>${result.counts[m.id]} voto(s)</p>`}${room.phase.startsWith('tie-')&&admin&&result.tied.includes(m.id)?choice('resolve','Escolher '+m.name,{target:m.id}):''}</article>`).join('')}</div>${room.phase.startsWith('tie-')?'<h2>Empate · aguardando decisão do administrador</h2>':''}${room.phase.startsWith('result-')?`<h2 class="vote-winner">🏆 ${esc(room.members.find(m=>m.id===result.winner)?.name)} · +1 ponto</h2>${admin?kind==='best'?button('vote-worst','Continuar: votação do pior fato →'):button('goals','Continuar: metas pessoais →'):'<p>Aguarde o administrador iniciar a próxima etapa.</p>'}`:''}</div></section>`;
+    const voteButton=m=>m.id===user.id?'<button disabled class="vote-self">Seu perfil · voto próprio bloqueado</button>':room.voted?'<button disabled>Voto já registrado ✓</button>':(joined||(admin&&room.administratorId===user.id))?choice('vote','Votar em '+m.name,{target:m.id}):'';
+    const surface=document.getElementById('room-vote-portal');
+    const voteKey=JSON.stringify([room.id,room.phase,room.testMode,room.voted,room.voteCount,room.electorate,room.results,room.var,room.members.map(m=>[m.id,m.name,m.photoUrl,m.draft?.[field]])]);
+    if(voteLayout!==voteKey){
+    const oldScroll=surface.querySelector('.vote-overlay')?.scrollTop||0;
+    voteLayout=voteKey;
+    surface.innerHTML=`<section class="vote-overlay" role="dialog" aria-modal="true" aria-labelledby="vote-heading"><div class="vote-dialog"><header>${room.testMode?'<p class="test-mode-banner">MODO TESTE · Sem pontuação</p>':''}<p class="room-eyebrow">🗳️ HORA DE ESCOLHER</p><h1 id="vote-heading" tabindex="-1">Votação do ${title} fato da semana</h1><p>${isVoting?'Leia os relatos e escolha uma pessoa. Ninguém pode votar em si mesmo.':'Confira o resultado desta rodada.'}</p>${isVoting?`<p class="vote-progress">${room.voteCount} de ${room.electorate.length} votos recebidos ${room.voted?'· Seu voto foi registrado ✓':''}</p>`:''}</header>${isVoting&&room.members.length<2?'<p class="vote-empty-note" role="status">👥 Para votar, precisamos de pelo menos duas pessoas na sala. Ninguém pode votar em si mesmo. Este teste sozinho não permite registrar voto.</p>':''}<div class="vote-candidates">${room.members.map(m=>`<article class="vote-candidate ${m.id===user.id?'is-me':''}">${portraits(m)}<h2>${esc(m.name)}${m.id===user.id?' <small>(você)</small>':''}</h2><p class="vote-story">${esc(m.draft?.[field]||'Relato não preenchido.')}</p>${isVoting?voteButton(m):`<p>${result.counts[m.id]} voto(s)</p>`}${room.phase.startsWith('tie-')&&admin&&result.tied.includes(m.id)?choice('resolve','Escolher '+m.name,{target:m.id}):''}</article>`).join('')}</div>${room.phase.startsWith('tie-')?'<h2>Empate · aguardando decisão do administrador</h2>':''}${room.phase.startsWith('result-')?`<h2 class="vote-winner">🏆 ${esc(room.members.find(m=>m.id===result.winner)?.name)} · +1 ponto</h2>${admin?kind==='best'?button('vote-worst','Continuar: votação do pior fato →'):button('goals','Continuar: metas pessoais →'):'<p>Aguarde o administrador iniciar a próxima etapa.</p>'}`:''}</div></section>`;
     if(room.phase.startsWith('result-')){
       const winner=room.members.find(m=>m.id===result.winner);
-      stage.innerHTML=`<section class="vote-overlay winner-overlay" role="dialog" aria-modal="true" aria-labelledby="vote-heading"><div class="winner-card ${kind==='worst'?'winner-sad':''}"><span class="winner-confetti" aria-hidden="true">${kind==='best'?'✨ 🎊 ✨':'🌧️ 😢 💩'}</span><p class="room-eyebrow">${kind==='best'?'☀️ MELHOR':'🌧️ PIOR'} FATO DA SEMANA</p>${portraits(winner)}<h1 id="vote-heading" tabindex="-1">${esc(winner.name)}</h1><p class="winner-award">${kind==='best'?'🏆 Ganhou o melhor fato da semana!':'😔 Poxa… foi o pior fato da semana.'}</p><p class="winner-point">${kind==='best'?'⭐':'💩'} +1 ponto</p><blockquote>${esc(winner.draft?.[field]||'Relato não registrado.')}</blockquote><p>${kind==='best'?'Uma história que marcou nosso encontro. 💙':'Tem semana que é assim… estamos juntos. 💙'}</p>${admin?kind==='best'?button('vote-worst','Continuar: votação do pior fato →'):button('goals','Continuar: metas pessoais →'):`<p>Aguarde ${host} continuar.</p>`}</div></section>`;
+      surface.innerHTML=`<section class="vote-overlay winner-overlay" role="dialog" aria-modal="true" aria-labelledby="vote-heading"><div class="winner-card ${kind==='worst'?'winner-sad':''}">${room.testMode?'<p class="test-mode-banner">MODO TESTE · Sem pontuação</p>':''}<span class="winner-confetti" aria-hidden="true">${kind==='best'?'✨ 🎊 ✨':'🌧️ 😢 💩'}</span><p class="room-eyebrow">${kind==='best'?'☀️ MELHOR':'🌧️ PIOR'} FATO DA SEMANA</p>${portraits(winner)}<h1 id="vote-heading" tabindex="-1">${esc(winner.name)}</h1><p class="winner-award">${kind==='best'?'🏆 Ganhou o melhor fato da semana!':'😔 Poxa… foi o pior fato da semana.'}</p><p class="winner-point">${room.testMode?'Sem pontos neste teste':(kind==='best'?'⭐':'💩')+' +1 ponto'}</p><blockquote>${esc(winner.draft?.[field]||'Relato não registrado.')}</blockquote><p>${kind==='best'?'Uma história que marcou nosso encontro. 💙':'Tem semana que é assim… estamos juntos. 💙'}</p>${admin?kind==='best'?button('vote-worst','Continuar: votação do pior fato →'):button('goals','Continuar: metas pessoais →'):`<p>Aguarde ${host} continuar.</p>`}</div></section>`;
+    }
+    const review=room.var?.[kind];
+    if(room.phase.startsWith('result-')){
+      const panel=document.createElement('section');panel.className='var-panel';panel.innerHTML=`<h2>VAR</h2><p>${review?.resolved?'Decisão final do ADM.':review?.pending?'Maioria atingida. Aguardando decisão do ADM.':`${review?.requests.length||0} pedidos · maioria: ${review?.threshold||Math.floor(new Set([...room.members.map(m=>m.id),room.administratorId]).size/2)+1}`}</p>${!review?.resolved&&!review?.requests.includes(user.id)&&(joined||admin)?button('var','Pedir VAR'):''}${review?.pending&&admin?room.members.map(m=>choice('resolve-var','Decidir: '+m.name,{target:m.id})).join(''):''}`;
+      surface.querySelector('.winner-card').append(panel);
+      if(review?.pending)surface.querySelectorAll('[data-room-action="vote-worst"],[data-room-action="goals"]').forEach(b=>b.disabled=true);
+    }
+    surface.querySelector('.vote-overlay').scrollTop=lastVotePhase===room.id+':'+room.phase?oldScroll:0;
     }
     const votePhase=room.id+':'+room.phase;
-    if(lastVotePhase!==votePhase&&joined){currentView='room';lastVotePhase=votePhase;requestAnimationFrame(()=>document.getElementById('vote-heading')?.focus());}
+    if(lastVotePhase!==votePhase&&joined){currentView='room';lastVotePhase=votePhase;requestAnimationFrame(()=>document.getElementById('vote-heading')?.focus({preventScroll:true}));}
   }else if(room?.phase==='goals'){
     const person=room.members[room.current],marked=room.goalResults?.[person.id]||{};
     const goalLabels={exercicio:['💪','Exercício físico'],familia:['👨‍👩‍👧‍👦','Família'],alimentacao:['🥗','Alimentação'],hobbies:['🎨','Hobbies'],conhecimentos:['📚','Conhecimentos']};
@@ -173,23 +215,27 @@ function render(){
   }else if(room&&['completed','closed'].includes(room.phase)&&endingRoom===room.id&&currentView==='room'){
     const complete=room.phase==='completed'||room.completedAt;
     document.getElementById('room-status').innerHTML='';document.getElementById('room-controls').innerHTML='';
-    stage.innerHTML=`<dialog class="meeting-ending" aria-labelledby="ending-title"><div class="ending-card"><span class="ending-emoji">🌅 ✨</span><p class="room-eyebrow">NOSSO ENCONTRO CHEGOU AO FIM</p><h1 id="ending-title" tabindex="-1">É isso!<br>Tenha um bom final de semana!</h1><p>${complete?'Metas concluídas, histórias compartilhadas e pontos registrados.':'A sala foi encerrada. Seus relatos foram preservados.'}</p><p>Descanse, aproveite e até o próximo encontro. 💙</p><div class="ending-actions"><button data-profile-view="profile">👤 Ir para meu perfil</button>${admin?'<button data-profile-view="admin">🏆 Administrador e rankings</button>'+button('create','✨ Criar próxima sala'):''}</div></div></dialog>`;
+    stage.innerHTML=`<dialog class="meeting-ending" aria-labelledby="ending-title"><div class="ending-card"><span class="ending-emoji">🌅 ✨</span><p class="room-eyebrow">NOSSO ENCONTRO CHEGOU AO FIM</p><h1 id="ending-title" tabindex="-1">É isso!<br>Tenha um bom final de semana!</h1><p>${room.testMode?'Teste concluído. Nenhum ponto, penalidade ou histórico oficial foi registrado.':complete?'Metas concluídas, histórias compartilhadas e pontos registrados.':'A sala foi encerrada. Seus relatos foram preservados.'}</p><p>Descanse, aproveite e até o próximo encontro. 💙</p><div class="ending-actions"><button data-profile-view="profile">👤 Ir para meu perfil</button>${admin?'<button data-profile-view="admin">🏆 Administrador e rankings</button>'+button('create','✨ Criar próxima sala'):''}</div></div></dialog>`;
     const ending=stage.querySelector('.meeting-ending');ending.addEventListener('cancel',e=>e.preventDefault());ending.showModal();
-    if(lastEnding!==room.id){lastEnding=room.id;if(joined)currentView='room';requestAnimationFrame(()=>document.getElementById('ending-title')?.focus());}
+    if(lastEnding!==room.id){lastEnding=room.id;if(joined)currentView='room';requestAnimationFrame(()=>document.getElementById('ending-title')?.focus({preventScroll:true}));}
   }else if(room&&['completed','closed'].includes(room.phase)){
     stage.innerHTML='<p>O encontro já terminou. Até a próxima semana! 💙</p>';
     document.getElementById('room-controls').innerHTML=admin?button('create','✨ Criar próxima sala'):'';
   }else if(room?.phase==='presenting'){
     const person=room.members[room.current];
+    const nextTurnKey=room.id+':'+room.current;
+    if(turnKey!==nextTurnKey&&currentView==='room'){
+      turnKey=nextTurnKey;document.getElementById('turn-announcement')?.remove();const announce=document.createElement('div');announce.id='turn-announcement';announce.className='turn-announcement';announce.setAttribute('role','status');announce.innerHTML=`<p>É A VEZ DE</p><h1>${esc(person.name)}</h1>`;document.body.append(announce);setTimeout(()=>announce.remove(),2600);
+    }
     const fact=room.presentationFact==='worst'?'worst':'best';
-    stage.innerHTML=person?`<section class="story-presentation ${fact}"><p class="room-eyebrow">🎙️ ${room.current+1} DE ${room.members.length} · VAMOS OUVIR</p><div class="story-person">${avatar(person.photoUrl,person.name)}<h2>${esc(person.name)}</h2></div><span class="story-emoji">${fact==='best'?'☀️':'🌧️'}</span><h1>${fact==='best'?'O melhor':'O pior'} fato da semana</h1><p class="room-story">${esc(person.draft?.[fact]||'Não preenchido.')}</p><p>${host} conduz. ${esc(person.name)} conta sua história. 💬</p></section>`:'<p>Nenhum participante.</p>';
+    stage.innerHTML=person?`<section class="story-presentation ${fact}"><p class="room-eyebrow">🎙️ ${room.current+1} DE ${room.members.length} · VAMOS OUVIR</p><div class="story-person">${avatar(person.photoUrl,person.name)}<h2>${esc(person.name)}</h2></div><span class="story-emoji">${fact==='best'?'☀️':'🌧️'}</span><h1>${fact==='best'?'O melhor':'O pior'} fato da semana</h1><p class="room-story">${esc(person.draft?.[fact]||'Não preenchido.')}</p><p>${host} conduz. ${esc(person.name)} conta sua história. 💬</p>${person.id===user.id||admin?(fact==='best'?choice('turn-next','Mostrar meu pior fato →',{target:person.id}):room.current<room.members.length-1?choice('turn-next','Concluir minha vez →',{target:person.id}):'<p>Apresentação concluída. O ADM pode abrir a votação.</p>'):''}</section>`:'<p>Nenhum participante.</p>';
   }else if(room?.phase!=='writing'||!joined){
     stage.innerHTML=`<section class="waiting-goals"><p class="room-eyebrow">🌱 MINHA SEMANA COMEÇA AQUI</p><h2>Suas metas vão com você ✨</h2><p>${host} conduz o encontro. Enquanto isso, relembre seus pequenos grandes passos.</p><div class="live-goals-grid">${Object.entries(labels).map(([key,label])=>`<article class="live-goal live-goal-${key}"><h3 class="waiting-goal-title">${label}</h3><p class="live-goal-text">${esc(state.profile?.objectives?.[key]||'Meta aguardando preenchimento do formulário. 🌱')}</p></article>`).join('')}</div><p>🎙️ Escrita → 💬 Histórias → 🗳️ Votações → 🎯 Metas</p></section>`;
   }
   if(roomId&&sessionStorage.getItem('melhores-unsent-'+roomId)&&room?.phase!=='writing'&&!document.getElementById('room-recovery')){
     const box=document.createElement('section');box.id='room-recovery';box.className='room-card';const unsent=JSON.parse(sessionStorage.getItem('melhores-unsent-'+roomId));box.innerHTML='<h2>Texto local não confirmado</h2><p>A escrita foi encerrada antes da confirmação do salvamento. Copie seu relato e avise o administrador.</p><p class="room-story">'+esc(unsent.best)+'\n\n'+esc(unsent.worst)+'</p>';content.append(box);
   }
-  renderProfile();changeView(currentView);
+  renderProfile();changeView(currentView);renderChat(room);
   tick();
 }
 async function save(done){
