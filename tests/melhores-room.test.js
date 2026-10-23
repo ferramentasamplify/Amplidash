@@ -401,3 +401,43 @@ test('formatted sheet sync blanks red cells, accepts newer partial responses and
  applySheetRows(state,[rows[0],['0','Isaias','a','b','c','d','e'],rows[1]],account);const p=state.participants[0];assert.equal(p.objectives.exercicio,'');assert.equal(p.objectives.familia,'Meta nova');assert.equal(p.objectives.alimentacao,'');assert.equal(p.sheetEnrollment.active,false);assert.equal(p.categories.familia,4);assert.equal(p.totalPoints,5);assert.equal(state.weeklyFactHistory[0].id,'keep');assert.equal(p.photoUrl,'https://example.com/photo.jpg');
  const corrected=structuredClone(rows);corrected[1][2]='Treinar 3x';corrected[1][4]='Fruta por dia';applySheetRows(state,corrected,account);assert.equal(p.sheetEnrollment.active,true);assert.equal(p.objectives.exercicio,'Treinar 3x');
 });
+
+test('speaker controls reject other participants and stale turns',async()=>{
+ const store=new Store();const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body),{store,game});
+ await store.setJSON('active-room',{id:'speaker',phase:'presenting',administratorId:'alexandre-neto',members:['ana','bruno'],current:0,presentationFact:'best',votes:{best:{},worst:{}},results:{}});
+ assert.equal((await call(bruno,{action:'turn-next',roomId:'speaker',target:'ana'})).status,403);
+ assert.equal((await call(ana,{action:'turn-next',roomId:'speaker',target:'ana'})).body.room.presentationFact,'worst');
+ assert.equal((await call(ana,{action:'turn-next',roomId:'speaker',target:'ana'})).body.room.current,1);
+ assert.equal((await call(admin,{action:'turn-next',roomId:'speaker',target:'ana'})).status,409);
+});
+
+test('VAR requires absolute majority, blocks progression and only host decides',async()=>{
+ const store=new Store();const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body),{store,game});
+ await store.setJSON('active-room',{id:'var',phase:'result-best',administratorId:'alexandre-neto',members:['ana','bruno'],current:1,votes:{best:{ana:'bruno',bruno:'ana'},worst:{}},results:{best:{counts:{ana:1,bruno:1},tied:['ana','bruno'],winner:'ana'}}});
+ let r=await call(ana,{action:'var',roomId:'var'});assert.equal(r.body.room.var.best.pending,false);
+ r=await call(ana,{action:'var',roomId:'var'});assert.equal(r.body.room.var.best.requests.length,1);
+ r=await call(bruno,{action:'var',roomId:'var'});assert.equal(r.body.room.var.best.pending,true);
+ assert.equal((await call(admin,{action:'vote-worst',roomId:'var'})).status,409);
+ assert.equal((await call(ana,{action:'resolve-var',roomId:'var',target:'bruno'})).status,403);
+ r=await call(admin,{action:'resolve-var',roomId:'var',target:'bruno'});assert.equal(r.body.room.results.best.winner,'bruno');assert.equal(r.body.room.var.best.resolved,true);
+ assert.equal((await call(ana,{action:'var',roomId:'var'})).status,409);
+});
+
+test('chat isolates rooms, validates GIF links and limits rapid messages',async()=>{
+ const store=new Store();const ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body,body?'POST':'GET'),{store,game});
+ await store.setJSON('active-room',{id:'chat',phase:'waiting',administratorId:'alexandre-neto',members:['ana'],votes:{best:{},worst:{}},results:{}});
+ assert.equal((await call(bruno,{action:'chat',roomId:'chat',text:'intruso'})).status,403);
+ assert.equal((await call(ana,{action:'chat',roomId:'chat',gif:'https://evil.example/a.gif'})).status,400);
+ let r=await call(ana,{action:'chat',roomId:'chat',text:'Olá <script>',gif:'https://media.tenor.com/example/test.gif'});assert.equal(r.status,200);assert.equal(r.body.room.chat[0].text,'Olá <script>');
+ assert.equal((await call(ana,{action:'chat',roomId:'chat',text:'rápido'})).status,429);
+ assert.deepEqual((await call(bruno)).body.room.chat,[]);
+});
+
+test('participant with stale presence can still vote in an open ballot',async()=>{
+ const store=new Store();const ana=await login(store,'ana');
+ await store.setJSON('active-room',{id:'vote',phase:'voting-best',administratorId:'alexandre-neto',members:['ana','bruno'],electorate:['ana','bruno'],votes:{best:{},worst:{}},results:{}});
+ const r=await roomRequest(request(ana,{action:'vote',roomId:'vote',target:'bruno'}),{store,game});assert.equal(r.status,200);assert.equal(r.body.room.voted,true);
+});
