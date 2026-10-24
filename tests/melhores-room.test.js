@@ -478,3 +478,22 @@ test('legacy open voting gets a five-minute deadline only once',async()=>{
  const call=()=>roomRequest(request(ana,null,'GET'),{store,game});
  const a=await call(),b=await call();assert.equal(a.body.room.votingDeadline,b.body.room.votingDeadline);assert.ok(a.body.room.votingDeadline>Date.now()+299000);
 });
+
+
+test('presentation VAR isolates facts, rejects stale requests and blocks advancement until host review',async()=>{
+ const store=new Store();const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana'),bruno=await login(store,'bruno');
+ const call=(cookie,body)=>roomRequest(request(cookie,body),{store,game});
+ await store.setJSON('active-room',{id:'pv',phase:'presenting',administratorId:'alexandre-neto',members:['ana','bruno'],current:0,presentationFact:'best',votes:{best:{},worst:{}},results:{}});
+ const requestVar={action:'var',roomId:'pv',target:'ana',fact:'best'};
+ assert.equal((await call(ana,{...requestVar,fact:'worst'})).status,409);
+ assert.equal((await call(ana,{...requestVar,target:'bruno'})).status,409);
+ let r=await call(ana,requestVar);assert.equal(r.body.room.presentationVar['0:best'].pending,false);
+ r=await call(ana,requestVar);assert.equal(r.body.room.presentationVar['0:best'].requests.length,1);
+ r=await call(bruno,requestVar);assert.equal(r.body.room.presentationVar['0:best'].pending,true);
+ for(const action of ['turn-next','show-worst','next','vote-best'])assert.equal((await call(action==='turn-next'?ana:admin,{action,roomId:'pv',target:'ana'})).status,409);
+ assert.equal((await call(ana,{...requestVar,action:'resolve-var'})).status,403);
+ r=await call(admin,{...requestVar,action:'resolve-var'});assert.equal(r.body.room.presentationVar['0:best'].resolved,true);assert.deepEqual(r.body.room.results,{});
+ r=await call(ana,{action:'turn-next',roomId:'pv',target:'ana'});assert.equal(r.body.room.presentationFact,'worst');
+ r=await call(ana,{...requestVar,fact:'worst'});assert.equal(r.body.room.presentationVar['0:worst'].requests.length,1);
+ assert.equal(r.body.room.presentationVar['0:best'].resolved,true);
+});

@@ -35,6 +35,11 @@ export function createMeetingSound(container) {
   document.addEventListener('click',e=>{const button=e.target.closest('button');if(!button||button===toggle||button.disabled||!button.closest('#weekly-room'))return;unlock();notes([[660,0,.08],[880,.06,.12]],'triangle',.09);},{capture:true});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
   const test=document.createElement('button');test.type='button';test.className='sound-test';test.textContent='🎵 Testar som';container.append(test);test.onclick=()=>{if(!enabled){enabled=true;try{localStorage.setItem('melhores_sound','on');}catch{}label();}unlock();celebrate('best');};
+  function whistle(){
+    stop();
+    // Two short referee-whistle blasts, with a slightly detuned overtone.
+    notes([[2400,0,.32,2600],[2510,0,.32,2710],[2400,.43,.55,2550],[2510,.43,.55,2660]],'sine',.065);
+  }
   label();
-  return {update(room,joined){const phase=room?.phase||'',event=phase==='result-best'?'best':phase==='result-worst'?'worst':phase==='completed'||phase==='closed'?'ending':'';const key=event?`${room.id}:${event}`:'';if(key===lastEvent)return;stop();lastEvent=key;if(event&&joined)celebrate(event);},stop};
+  return {whistle,update(room,joined){const phase=room?.phase||'',event=phase==='result-best'?'best':phase==='result-worst'?'worst':phase==='completed'||phase==='closed'?'ending':'';const key=event?`${room.id}:${event}`:'';if(key===lastEvent)return;stop();lastEvent=key;if(event&&joined)celebrate(event);},stop};
 }

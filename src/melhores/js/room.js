@@ -43,7 +43,8 @@ function renderProfile(){
 
 async function api(endpoint, body) {
   const res = await fetch('/api/melhores/' + endpoint, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers: body ? {'Content-Type':'application/json'} : {}, ...(body ? {body: JSON.stringify(body)} : {}) });
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch { throw new Error('O serviço de login está temporariamente indisponível. Tente novamente em instantes.'); }
   if (res.status === 401 && endpoint !== 'auth') { location.reload(); throw new Error('Sua sessão expirou.'); }
   if (!res.ok || !data.ok) throw new Error(data.error || 'Não foi possível concluir.');
   return data;
@@ -51,7 +52,7 @@ async function api(endpoint, body) {
 function error(message, source='action') { const overlay=document.querySelector('#room-vote-portal .vote-overlay');if(overlay){let feedback=overlay.querySelector('.vote-error');if(!feedback){feedback=document.createElement('p');feedback.className='vote-error';feedback.setAttribute('role','alert');overlay.prepend(feedback);}feedback.textContent=message;} const e = document.getElementById('room-error'); if(e) {e.textContent = message;e.dataset.source=source;} }
 function clearPollingError(){const e=document.getElementById('room-error');if(e?.dataset.source==='poll')error('','poll');}
 function login() {
-  root.innerHTML = `<main class="room-page"><section class="room-card room-login"><p class="room-eyebrow">AMPLIFY · SEXTA-FEIRA</p><h1>Best of the week</h1><p>Uma semana. Suas histórias. Nosso encontro.</p><form id="room-login"><label>Login<input name="username" autocomplete="username" required maxlength="100"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label><button>Entrar</button></form><p id="room-error" role="alert"></p></section></main>`;
+  root.innerHTML = `<main class="room-page"><section class="room-card room-login"><p class="room-eyebrow">AMPLIFY</p><h1>Best of the week</h1><p>Uma semana. Suas histórias. Nosso encontro.</p><form id="room-login"><label>Login<input name="username" autocomplete="username" required maxlength="100"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label><button>Entrar</button></form><p id="room-error" role="alert"></p></section></main>`;
   document.getElementById('room-login').onsubmit = async e => {
     e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true; error('');
     try { const f = new FormData(e.target); const result = await api('auth',{username:f.get('username'),password:f.get('password')}); user=result.user; await shell(); }
@@ -90,7 +91,7 @@ async function shell() {
         b.closest('.live-goal-actions')?.querySelectorAll('button').forEach(el=>{el.dataset.pendingMark=el.dataset.result===result?'selected':'dim';});
       }
       await save(false);
-      receiveState(await api('room',{action:b.dataset.roomAction, ...(b.dataset.roomAction==='start'?{participate:true}:{}), roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),...(b.dataset.enabled?{enabled:b.dataset.enabled==='true'}:{}),target:b.dataset.target,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})}));
+      receiveState(await api('room',{action:b.dataset.roomAction, ...(b.dataset.roomAction==='start'?{participate:true}:{}), roomId:state?.room?.id, ...(b.dataset.seconds?{seconds:Number(b.dataset.seconds)}:{}),...(b.dataset.enabled?{enabled:b.dataset.enabled==='true'}:{}),target:b.dataset.target,fact:b.dataset.fact,category:b.dataset.category,result:b.dataset.result,...(gymrats!==undefined?{gymrats}:{})}));
       if(b.dataset.roomAction==='join')currentView='room';
       render();
 
@@ -197,7 +198,7 @@ function render(){
     }
     const review=room.var?.[kind];
     if(room.phase.startsWith('result-')){
-      const panel=document.createElement('section');panel.className='var-panel';panel.innerHTML=`<h2>VAR</h2><p>${review?.resolved?'Decisão final do ADM.':review?.pending?'Maioria atingida. Aguardando decisão do ADM.':`${review?.requests.length||0} pedidos · maioria: ${review?.threshold||Math.floor(new Set([...room.members.map(m=>m.id),room.administratorId]).size/2)+1}`}</p>${!review?.resolved&&!review?.requests.includes(user.id)&&(joined||admin)?button('var','Pedir VAR'):''}${review?.pending&&admin?room.members.map(m=>choice('resolve-var','Decidir: '+m.name,{target:m.id})).join(''):''}`;
+      const panel=document.createElement('section');panel.className='var-panel';panel.innerHTML=`${review?.pending?'<video class="var-referee" autoplay loop muted playsinline preload="auto" poster="/images/var-arbitro.jpg" aria-label="Árbitro sinalizando revisão do VAR"><source src="/images/var-arbitro.mp4" type="video/mp4"><img src="/images/var-arbitro.jpg" alt="Árbitro sinalizando revisão do VAR"></video><strong class="var-active" role="status">VAR ACIONADO</strong>':''}<h2>VAR</h2><p>${review?.resolved?'Decisão final do ADM.':review?.pending?'Maioria atingida. Aguardando decisão do ADM.':`${review?.requests.length||0} pedidos · maioria: ${review?.threshold||Math.floor(new Set([...room.members.map(m=>m.id),room.administratorId]).size/2)+1}`}</p>${!review?.resolved&&!review?.requests.includes(user.id)&&(joined||admin)?button('var','Pedir VAR'):''}${review?.pending&&admin?room.members.map(m=>choice('resolve-var','Decidir: '+m.name,{target:m.id})).join(''):''}`;
       surface.querySelector('.winner-card').append(panel);
       if(review?.pending)surface.querySelectorAll('[data-room-action="vote-worst"],[data-room-action="goals"]').forEach(b=>b.disabled=true);
     }
@@ -235,8 +236,27 @@ function render(){
   if(roomId&&sessionStorage.getItem('melhores-unsent-'+roomId)&&room?.phase!=='writing'&&!document.getElementById('room-recovery')){
     const box=document.createElement('section');box.id='room-recovery';box.className='room-card';const unsent=JSON.parse(sessionStorage.getItem('melhores-unsent-'+roomId));box.innerHTML='<h2>Texto local não confirmado</h2><p>A escrita foi encerrada antes da confirmação do salvamento. Copie seu relato e avise o administrador.</p><p class="room-story">'+esc(unsent.best)+'\n\n'+esc(unsent.worst)+'</p>';content.append(box);
   }
+  renderVarPresentation(room,admin,joined);
   renderProfile();changeView(currentView);renderChat(room);
   tick();
+}
+function renderVarPresentation(room,admin,joined){
+ const fact=room?.presentationFact==='worst'?'worst':'best';
+ const review=room?.phase==='presenting'?room.presentationVar?.[room.current+':'+fact]:room?.phase?.startsWith('result-')?room.var?.[room.phase.endsWith('best')?'best':'worst']:null;
+ const key=room?.id+':'+room?.phase+':'+room?.current+':'+fact;
+ let overlay=document.getElementById('var-big-screen');
+ if(review?.pending&&(joined||admin)){
+  if(overlay?.dataset.review!==key){overlay?.remove();overlay=document.createElement('section');overlay.id='var-big-screen';overlay.dataset.review=key;overlay.className='var-big-screen';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','var-big-title');overlay.innerHTML=`<h1 id="var-big-title">O VAR FOI ACIONADO</h1><video autoplay loop muted playsinline poster="/images/var-arbitro.jpg" aria-label="Árbitro acionando o VAR"><source src="/images/var-arbitro.mp4" type="video/mp4"></video><p>Maioria atingida. Aguardando decisão do ADM.</p><div class="var-big-actions"></div>`;root.append(overlay);meetingSound.whistle();}
+  const actions=overlay.querySelector('.var-big-actions');
+  if(admin&&room.phase==='presenting')actions.innerHTML=choice('resolve-var','Concluir revisão e continuar',{target:room.members[room.current].id,fact});
+  else if(admin)actions.innerHTML=room.members.map(m=>choice('resolve-var','Decidir: '+m.name,{target:m.id})).join('');
+ }else overlay?.remove();
+ if(room?.phase!=='presenting')return;
+ const person=room.members[room.current];if(!person)return;
+ const panel=document.createElement('section');panel.className='var-panel';
+ const threshold=review?.threshold||Math.floor(new Set([...room.members.map(m=>m.id),room.administratorId]).size/2)+1;
+ panel.innerHTML=`<h2>VAR do relato</h2><p>${review?.resolved?'Revisão concluída pelo ADM.':`${review?.requests.length||0} pedidos · maioria: ${threshold}`}</p>${!review?.resolved&&!review?.requests.includes(user.id)&&(joined||admin)?choice('var','Chamar VAR',{target:person.id,fact}):''}`;
+ document.querySelector('.story-presentation')?.append(panel);
 }
 async function save(done){
   const best=document.getElementById('room-best'),worst=document.getElementById('room-worst');

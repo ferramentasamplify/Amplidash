@@ -83,6 +83,8 @@ export async function roomRequest(request, deps = {}) {
             const kind=action==='vote-worst'?'best':'worst';
             if(room.var?.[kind]?.pending)fail('O ADM precisa concluir o VAR antes de continuar.',409);
           }
+          const presentationKey=room.current+':'+(room.presentationFact==='worst'?'worst':'best');
+          if(room.phase==='presenting'&&room.presentationVar?.[presentationKey]?.pending&&['show-worst','next','turn-next','vote-best'].includes(action))fail('O ADM precisa concluir o VAR antes de continuar.',409);
           if(action==='test-mode'){
             if(room.phase!=='waiting')fail('O modo teste só pode mudar antes de iniciar a rodada.',409);
             if(typeof body.enabled!=='boolean')fail('Informe se o modo teste deve ser habilitado.');
@@ -93,13 +95,20 @@ export async function roomRequest(request, deps = {}) {
             else if(room.current<room.members.length-1){room.current++;room.presentationFact='best';}
             else fail('Aguarde o ADM abrir a votação.',409);
           }else if(action==='var'){
-            const kind=room.phase==='result-best'?'best':room.phase==='result-worst'?'worst':null;
-            if(!kind||(!room.members.includes(user.id)&&user.id!==room.administratorId))fail('O VAR só pode ser solicitado no resultado da rodada.',403);
+            const presenting=room.phase==='presenting';
+            const kind=presenting?presentationKey:room.phase==='result-best'?'best':room.phase==='result-worst'?'worst':null;
+            if(!kind||(!room.members.includes(user.id)&&user.id!==room.administratorId))fail('O VAR só pode ser solicitado na apresentação ou no resultado.',403);
+            if(presenting&&body.target!==room.members[room.current])fail('A pessoa da vez mudou. Atualize a tela.',409);
+            if(presenting&&body.fact!==(room.presentationFact==='worst'?'worst':'best'))fail('O relato mudou. Atualize a tela.',409);
             const electorate=[...new Set([...room.members,room.administratorId])];
-            room.var||={};const review=room.var[kind]||={requests:[],threshold:Math.floor(electorate.length/2)+1,pending:false,resolved:false};
+            const reviews=presenting?(room.presentationVar||={}):(room.var||={});const review=reviews[kind]||={requests:[],threshold:Math.floor(electorate.length/2)+1,pending:false,resolved:false};
             if(review.resolved)fail('O ADM já decidiu este VAR.',409);
             if(!review.requests.includes(user.id))review.requests.push(user.id);
             if(review.requests.length>=review.threshold)review.pending=true;
+          }else if(action==='resolve-var'&&room.phase==='presenting'){
+            const review=room.presentationVar?.[presentationKey];
+            if(!review?.pending||body.target!==room.members[room.current]||body.fact!==(room.presentationFact==='worst'?'worst':'best'))fail('VAR ou relato inválido.',409);
+            review.pending=false;review.resolved=true;review.decidedBy=user.id;
           }else if(action==='resolve-var'){
             const kind=room.phase==='result-best'?'best':room.phase==='result-worst'?'worst':null;
             if(!kind||!room.var?.[kind]?.pending||!room.members.includes(body.target))fail('VAR ou participante inválido.',409);
