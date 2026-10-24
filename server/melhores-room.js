@@ -244,7 +244,12 @@ export async function roomRequest(request, deps = {}) {
     }));
     // Raw ballots are never returned, even to the administrator. Results appear only after all votes.
     const {votes, ...publicRoom} = room;
-    const chat=room.members.includes(user.id)||room.administratorId===user.id?await store.get('room-chat/'+room.id,{type:'json'})||[]:[];
+    const messages=room.members.includes(user.id)||room.administratorId===user.id?await store.get('room-chat/'+room.id,{type:'json'})||[]:[];
+    const chat=messages.map(message=>{
+      const account=accounts.find(a=>a.id===message.userId);
+      const participant=(game.participants||[]).find(p=>p.id===(account?.participantId||message.userId));
+      return {...message,photoUrl:participant?.photoUrl||''};
+    });
     const kind = room.phase.endsWith('-best') ? 'best' : 'worst';
     const voting = room.phase.startsWith('voting-');
     const safeProfile = personalProfile(game,user);

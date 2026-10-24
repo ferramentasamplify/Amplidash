@@ -497,3 +497,15 @@ test('presentation VAR isolates facts, rejects stale requests and blocks advance
  r=await call(ana,{...requestVar,fact:'worst'});assert.equal(r.body.room.presentationVar['0:worst'].requests.length,1);
  assert.equal(r.body.room.presentationVar['0:best'].resolved,true);
 });
+
+
+test('chat photos come from participant profiles, including old messages, not client data',async()=>{
+ const store=new Store();const ana=await login(store,'ana');
+ const profileGame={...game,participants:[{id:'ana',name:'Ana',photoUrl:'https://example.com/ana.jpg'}]};
+ await store.setJSON('active-room',{id:'photos',phase:'waiting',administratorId:'alexandre-neto',members:['ana'],votes:{best:{},worst:{}},results:{}});
+ await store.setJSON('room-chat/photos',[{id:'old',userId:'ana',name:'Ana',text:'Anterior',at:1}]);
+ const r=await roomRequest(request(ana,{action:'chat',roomId:'photos',text:'Nova',photoUrl:'https://fake.example/a.jpg'}),{store,game:profileGame});
+ assert.equal(r.status,200);assert.equal(r.body.room.chat.length,2);
+ for(const message of r.body.room.chat)assert.equal(message.photoUrl,'https://example.com/ana.jpg');
+ assert.equal((await store.get('room-chat/photos'))[1].photoUrl,undefined);
+});

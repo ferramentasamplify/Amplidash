@@ -1,3 +1,4 @@
+import {setupGifPicker} from './gif-picker.js';
 import {meetingNotice} from './meeting-schedule.js';
 import {createMeetingSound} from './sound.js';
 import '../css/room.css';
@@ -99,16 +100,13 @@ async function shell() {
   });
   const portal=document.createElement('div');portal.id='room-vote-portal';portal.className='room-page';root.append(portal);
   const chat=document.createElement('aside');chat.id='room-chat';chat.className='room-page room-chat';chat.hidden=true;
-  chat.innerHTML='<button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat da sala</button><section id="chat-panel" hidden><h2>Mensagens da sala</h2><div id="chat-messages" role="log" aria-label="Mensagens"></div><form id="chat-form"><label>Mensagem<input name="text" maxlength="1000" placeholder="Converse com o pessoal"></label><label>GIF do Giphy ou Tenor<input name="gif" type="url" maxlength="2000" placeholder="https://media.tenor.com/…/….gif"></label><p>Use um link direto .gif. Mensagens ficam nesta sala.</p><button type="button" id="chat-emoji" aria-label="Inserir emoji" aria-expanded="false">😊</button><div id="emoji-picker" hidden></div><button type="button" id="gif-toggle" aria-expanded="false">GIFs</button><div id="gif-picker" hidden></div><button type="submit">Enviar</button><p id="chat-error" role="status"></p></form></section>';root.append(chat);
+  chat.innerHTML='<button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat da sala</button><section id="chat-panel" hidden><h2>Mensagens da sala</h2><div id="chat-messages" role="log" aria-label="Mensagens"></div><form id="chat-form"><label>Mensagem<input name="text" maxlength="1000" placeholder="Converse com o pessoal"></label><input name="gif" type="hidden"><div id="gif-selection" hidden></div><button type="button" id="chat-emoji" aria-label="Inserir emoji" aria-expanded="false">😊</button><div id="emoji-picker" hidden></div><button type="button" id="gif-toggle" aria-expanded="false">GIFs</button><div id="gif-picker" hidden></div><button type="submit">Enviar</button><p id="chat-error" role="status"></p></form></section>';root.append(chat);
   document.getElementById('chat-toggle').onclick=()=>{const panel=document.getElementById('chat-panel');panel.hidden=!panel.hidden;document.getElementById('chat-toggle').setAttribute('aria-expanded',String(!panel.hidden));};
   const emojis=document.getElementById('emoji-picker');emojis.innerHTML=['😊','😂','❤️','👏','🔥','🎉','😢','🙌','👀','⚽','🏆','🤔'].map(emoji=>`<button type="button" data-emoji="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
   document.getElementById('chat-emoji').onclick=()=>{emojis.hidden=!emojis.hidden;document.getElementById('chat-emoji').setAttribute('aria-expanded',String(!emojis.hidden));};
   emojis.onclick=e=>{const b=e.target.closest('[data-emoji]');if(b){chat.querySelector('[name=text]').value+=' '+b.dataset.emoji;chat.querySelector('[name=text]').focus();}};
-  const gifs=[['Comemorar','g9582DNuQppxC'],['Aplausos','l3q2XhfQ8oCkm1Ts4'],['Risada','10JhviFuU2gWD6'],['Surpresa','5VKbvrjxpVJCM']];
-  const picker=document.getElementById('gif-picker');picker.innerHTML=gifs.map(([label,id])=>`<button type="button" data-gif="https://media.giphy.com/media/${id}/giphy.gif" aria-label="Selecionar GIF: ${label}"><img src="https://media.giphy.com/media/${id}/giphy.gif" alt="${label}" loading="lazy" referrerpolicy="no-referrer"></button>`).join('');
-  document.getElementById('gif-toggle').onclick=()=>{picker.hidden=!picker.hidden;document.getElementById('gif-toggle').setAttribute('aria-expanded',String(!picker.hidden));};
-  picker.onclick=e=>{const b=e.target.closest('[data-gif]');if(b){chat.querySelector('[name=gif]').value=b.dataset.gif;picker.hidden=true;document.getElementById('gif-toggle').setAttribute('aria-expanded','false');document.getElementById('chat-error').textContent='GIF selecionado. Clique em Enviar.';}};
-  document.getElementById('chat-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;document.getElementById('chat-error').textContent='';try{const data=new FormData(f);const next=await api('room',{action:'chat',roomId:state.room.id,text:data.get('text'),gif:data.get('gif')});f.reset();receiveState(next);render();}catch(e){document.getElementById('chat-error').textContent=e.message;}finally{b.disabled=false;}};
+  const gifPicker=setupGifPicker(chat);
+  document.getElementById('chat-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;document.getElementById('chat-error').textContent='';try{const data=new FormData(f);const next=await api('room',{action:'chat',roomId:state.room.id,text:data.get('text'),gif:data.get('gif')});f.reset();gifPicker.clear();receiveState(next);render();}catch(e){document.getElementById('chat-error').textContent=e.message;}finally{b.disabled=false;}};
   await poll();setInterval(poll,1200);setInterval(tick,250);
 }
 function choice(action,label,attrs={}) { return `<button data-room-action="${action}" ${Object.entries(attrs).map(([k,v])=>`data-${k}="${esc(v)}"`).join(' ')}>${esc(label)}</button>`; }
@@ -140,7 +138,7 @@ function renderChat(room){
  chat.hidden=currentView!=='room'||!room||['closed','completed'].includes(room.phase)||(!room.members.some(m=>m.id===user.id)&&room.administratorId!==user.id);
  const key=JSON.stringify([room?.id,room?.chat]);if(key===chatLayout)return;chatLayout=key;
  const list=document.getElementById('chat-messages');const bottom=list.scrollHeight-list.scrollTop-list.clientHeight<60;
- list.innerHTML=(room?.chat||[]).map(m=>`<article><strong>${esc(m.name)}</strong><time>${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time><p>${esc(m.text)}</p>${m.gif?`<img src="${esc(m.gif)}" alt="GIF enviado por ${esc(m.name)}" loading="lazy" referrerpolicy="no-referrer">`:''}</article>`).join('')||'<p>Comece a conversa.</p>';
+ list.innerHTML=(room?.chat||[]).map(m=>`<article><header class="chat-author">${avatar(m.photoUrl,m.name)}<strong>${esc(m.name)}</strong><time>${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time></header><p>${esc(m.text)}</p>${m.gif?`<img src="${esc(m.gif)}" alt="GIF enviado por ${esc(m.name)}" loading="lazy" referrerpolicy="no-referrer">`:''}</article>`).join('')||'<p>Comece a conversa.</p>';
  if(bottom)list.scrollTop=list.scrollHeight;
 }
 function render(){
