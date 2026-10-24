@@ -41,5 +41,5 @@ export function createMeetingSound(container) {
     notes([[2400,0,.32,2600],[2510,0,.32,2710],[2400,.43,.55,2550],[2510,.43,.55,2660]],'sine',.065);
   }
   label();
-  return {whistle,update(room,joined){const phase=room?.phase||'',event=phase==='result-best'?'best':phase==='result-worst'?'worst':phase==='completed'||phase==='closed'?'ending':'';const key=event?`${room.id}:${event}`:'';if(key===lastEvent)return;stop();lastEvent=key;if(event&&joined)celebrate(event);},stop};
+  return {whistle,update(room,joined){const phase=room?.phase||'',event=phase==='result-best'?'best':phase==='result-worst'?'worst':phase==='completed'?'ending':'';const key=event?`${room.id}:${event}`:'';if(key===lastEvent)return;stop();lastEvent=key;if(event&&joined)celebrate(event);},stop};
 }
