@@ -457,3 +457,24 @@ test('only host can toggle test mode before start; finished test never changes s
  assert.deepEqual(await gameStore.get('game-state'),original);
  room.phase='closed';await store.setJSON('active-room',room);await call(admin);assert.deepEqual(await gameStore.get('game-state'),original);
 });
+
+test('five-minute ballots expire server-side, count partial votes, and reject late votes',async()=>{
+ const store=new Store();const admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ const call=(cookie,body)=>roomRequest(request(cookie,body,body?'POST':'GET'),{store,game});
+ await store.setJSON('active-room',{id:'timed',phase:'presenting',administratorId:'alexandre-neto',members:['ana','bruno'],current:1,presentationFact:'worst',votes:{best:{},worst:{}},results:{}});
+ for(const id of ['ana','bruno'])await store.setJSON('presence/timed/'+id,{seen:Date.now()});
+ let r=await call(admin,{action:'vote-best',roomId:'timed'});assert.equal(r.status,200);assert.ok(Math.abs(r.body.room.votingDeadline-Date.now()-300000)<1000);
+ let room=await store.get('active-room');room.votes.best={ana:'bruno'};room.votingDeadline=Date.now()-1;await store.setJSON('active-room',room);
+ r=await call(ana,{action:'vote',roomId:'timed',target:'bruno'});assert.notEqual(r.status,200);
+ r=await call(admin);assert.equal(r.body.room.phase,'result-best');assert.equal(r.body.room.results.best.winner,'bruno');assert.deepEqual(r.body.room.results.best.counts,{ana:0,bruno:1});
+ r=await call(admin,{action:'vote-worst',roomId:'timed'});assert.equal(r.status,200);assert.ok(r.body.room.votingDeadline>Date.now()+299000);
+ room=await store.get('active-room');room.votingDeadline=Date.now()-1;await store.setJSON('active-room',room);
+ r=await call(admin);assert.equal(r.body.room.phase,'tie-worst');assert.equal(r.body.room.results.worst.winner,null);assert.deepEqual(r.body.room.results.worst.tied,['ana','bruno']);
+});
+
+test('legacy open voting gets a five-minute deadline only once',async()=>{
+ const store=new Store();const ana=await login(store,'ana');
+ await store.setJSON('active-room',{id:'legacy-time',phase:'voting-best',administratorId:'alexandre-neto',members:['ana','bruno'],electorate:['ana','bruno'],votes:{best:{},worst:{}},results:{}});
+ const call=()=>roomRequest(request(ana,null,'GET'),{store,game});
+ const a=await call(),b=await call();assert.equal(a.body.room.votingDeadline,b.body.room.votingDeadline);assert.ok(a.body.room.votingDeadline>Date.now()+299000);
+});

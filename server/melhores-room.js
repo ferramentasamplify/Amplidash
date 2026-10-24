@@ -6,6 +6,27 @@ import { authenticate, sameOrigin, users, json, update } from './melhores-auth.j
 const adminActions = ['start','extend','present','show-worst','next','close','vote-best','vote-worst','resolve','goals','mark','next-goal','resolve-var','test-mode'];
 const categories = ['exercicio','familia','alimentacao','hobbies','conhecimentos'];
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
+function finishBallot(room,kind){
+  const counts=Object.fromEntries(room.members.map(id=>[id,0]));
+  for(const target of Object.values(room.votes?.[kind]||{}))if(Object.hasOwn(counts,target))counts[target]++;
+  const max=Math.max(...Object.values(counts));
+  const tied=room.members.filter(id=>counts[id]===max);
+  room.results||={};room.results[kind]={counts,tied,winner:tied.length===1?tied[0]:null};
+  room.phase=tied.length===1?'result-'+kind:'tie-'+kind;
+  room.votingClosedAt=Date.now();
+}
+async function refreshBallot(store){
+  const snapshot=await store.get('active-room',{type:'json'});
+  if(!snapshot?.phase?.startsWith('voting-'))return;
+  if(snapshot.votingDeadline&&snapshot.votingDeadline>Date.now())return;
+  await update(store,'active-room',room=>{
+    if(room?.id!==snapshot.id||!room.phase.startsWith('voting-'))return room;
+    // Open ballots created before this release receive their own full five minutes.
+    if(!room.votingDeadline)room.votingDeadline=Date.now()+300000;
+    else if(room.votingDeadline<=Date.now())finishBallot(room,room.phase.endsWith('-best')?'best':'worst');
+    return room;
+  });
+}
 export async function roomRequest(request, deps = {}) {
   try {
     const store = deps.store || getStore({ name: 'melhores-private', consistency: 'strong' });
@@ -13,6 +34,7 @@ export async function roomRequest(request, deps = {}) {
     if (!user) return json({ ok: false, error: 'Entre com seu login.' }, 401);
     if (!sameOrigin(request)) return json({ ok: false, error: 'Origem não permitida.' }, 403);
     const accounts = await users(store);
+    await refreshBallot(store);
     const body = request.body || {};
     if (request.method === 'POST') {
       const { action } = body;
@@ -111,23 +133,19 @@ export async function roomRequest(request, deps = {}) {
             const eligible = [...room.members];
             if (room.members.filter(id=>presence[id]?.seen>Date.now()-60000).length < 2) fail('São necessárias pelo menos duas pessoas conectadas para votar.',409);
             room.votes ||= {best:{},worst:{}}; room.results ||= {};
-            room.electorate = eligible; room.phase = 'voting-'+kind;
+            room.electorate = eligible; room.phase = 'voting-'+kind; room.votingDeadline=Date.now()+300000; room.votingClosedAt=null;
           } else if (action === 'vote') {
             const kind = room.phase === 'voting-best' ? 'best' : room.phase === 'voting-worst' ? 'worst' : null;
             const hostVoting = user.role === 'admin' && room.administratorId === user.id;
             if (!kind || (!room.members.includes(user.id) && !hostVoting)) fail('Você não participa desta votação.',403);
+            if(room.votingDeadline&&Date.now()>=room.votingDeadline)fail('O prazo de votação terminou. Aguarde a atualização do resultado.',409);
             if (body.target === user.id) fail('Ninguém pode votar em si mesmo.',400);
             if (!room.members.includes(body.target)) fail('Participante inválido.');
             if (room.votes[kind][user.id]) fail('Seu voto já foi registrado.',409);
             if (!room.electorate.includes(user.id)) room.electorate.push(user.id);
             room.votes[kind][user.id] = body.target;
             if (room.electorate.every(id => room.votes[kind][id])) {
-              const counts = Object.fromEntries(room.members.map(id=>[id,0]));
-              Object.values(room.votes[kind]).forEach(id => counts[id]++);
-              const max = Math.max(...Object.values(counts));
-              const tied = room.members.filter(id => counts[id] === max);
-              room.results[kind] = {counts,tied,winner:tied.length===1?tied[0]:null};
-              room.phase = tied.length===1 ? 'result-'+kind : 'tie-'+kind;
+              finishBallot(room,kind);
             }
           } else if (action === 'resolve') {
             const kind = room.phase === 'tie-best' ? 'best' : room.phase === 'tie-worst' ? 'worst' : null;

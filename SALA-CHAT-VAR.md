@@ -24,3 +24,11 @@ Mudanças preparadas em branch separada. Merge em main aciona o deploy automáti
 - Sala sinalizada como teste; fluxo de apresentação, voto, VAR e metas permanece disponível.
 - Concluir ou encerrar não aplica pontos, penalidades, conquistas ou histórico oficial de fatos. Os dados da sala continuam separados do ranking.
 - 29 testes de servidor aprovados, incluindo conclusão/encerramento/releituras sem mutação da pontuação e histórico.
+
+## Cronômetro e animações
+- Cada votação (melhor e pior) recebe 5 minutos contados pelo servidor. Todos os clientes usam o mesmo prazo.
+- Encerra antes se todos votarem. No prazo final, conta votos recebidos; empate ou zero votos exigem desempate do ADM.
+- Relógio fica visível inclusive após votar; últimas 60 segundos em destaque. Votos após o prazo são rejeitados no servidor.
+- Votações antigas já abertas recebem cinco minutos uma única vez, sem reiniciar a cada atualização.
+- Nome da vez entra com zoom e revelação; abertura “The Best of the Week” cresce de escala pequena para tela cheia. Ambas respeitam redução de movimento.
+- 31 testes de servidor e build aprovados.
