@@ -1,3 +1,4 @@
+import {setupChatResize} from './chat-resize.js';
 import {setupGifPicker} from './gif-picker.js';
 import {meetingNotice} from './meeting-schedule.js';
 import {createMeetingSound} from './sound.js';
@@ -100,10 +101,21 @@ async function shell() {
   });
   const portal=document.createElement('div');portal.id='room-vote-portal';portal.className='room-page';root.append(portal);
   const chat=document.createElement('aside');chat.id='room-chat';chat.className='room-page room-chat';chat.hidden=true;
-  chat.innerHTML='<button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat da sala</button><section id="chat-panel" hidden><header class="chat-panel-heading"><h2>Mensagens da sala</h2><button type="button" id="chat-close" aria-label="Fechar chat" title="Fechar chat">×</button></header><div id="chat-messages" role="log" aria-label="Mensagens"></div><form id="chat-form"><label>Mensagem<input name="text" maxlength="1000" placeholder="Converse com o pessoal"></label><input name="gif" type="hidden"><div id="gif-selection" hidden></div><div class="chat-compose-actions"><button type="button" id="gif-toggle" aria-expanded="false" aria-controls="gif-picker">GIFs</button><button type="submit" class="chat-send">Enviar →</button></div><div id="gif-picker" hidden></div><p id="chat-error" role="status"></p></form></section>';root.append(chat);
+  chat.innerHTML='<button id="chat-toggle" aria-expanded="false" aria-controls="chat-panel">Chat da sala</button><section id="chat-panel" hidden><header class="chat-panel-heading"><h2>Mensagens da sala</h2><button type="button" id="chat-close" aria-label="Fechar chat" title="Fechar chat">×</button></header><div id="chat-messages" role="log" aria-label="Mensagens"></div><button type="button" id="chat-latest" hidden aria-label="Ir para a mensagem mais recente">↓ Ir para a última mensagem</button><span id="chat-unread-status" class="chat-sr-only" role="status" aria-live="polite"></span><form id="chat-form"><label>Mensagem<input name="text" maxlength="1000" placeholder="Converse com o pessoal"></label><input name="gif" type="hidden"><div id="gif-selection" hidden></div><div class="chat-compose-actions"><button type="button" id="gif-toggle" aria-expanded="false" aria-controls="gif-picker">GIFs</button><button type="submit" class="chat-send">Enviar →</button></div><div id="gif-picker" hidden></div><p id="chat-error" role="status"></p></form></section>';root.append(chat);
+  setupChatResize(chat,user.id);
   const chatToggle=document.getElementById('chat-toggle'),chatPanel=document.getElementById('chat-panel');
   chatToggle.onclick=()=>{chatPanel.hidden=false;chatToggle.hidden=true;chatToggle.setAttribute('aria-expanded','true');document.getElementById('chat-close').focus();};
   document.getElementById('chat-close').onclick=()=>{chatPanel.hidden=true;chatToggle.hidden=false;chatToggle.setAttribute('aria-expanded','false');chatToggle.focus();};
+  const chatList=document.getElementById('chat-messages'),latest=document.getElementById('chat-latest');
+  chatList.unreadCount=0;chatList.followLatest=true;
+  function updateLatest(){
+   const bottom=chatList.scrollHeight-chatList.scrollTop-chatList.clientHeight<30;
+   chatList.followLatest=bottom;if(bottom)chatList.unreadCount=0;
+   latest.hidden=bottom;latest.textContent=chatList.unreadCount?'↓ Novas mensagens ('+chatList.unreadCount+')':'↓ Ir para a última mensagem';
+  }
+  chatList.addEventListener('scroll',updateLatest,{passive:true});
+  latest.onclick=()=>{chatList.unreadCount=0;chatList.followLatest=true;chatList.scrollTo({top:chatList.scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});latest.hidden=true;};
+  chatList.addEventListener('load',()=>{if(chatList.followLatest)chatList.scrollTop=chatList.scrollHeight;updateLatest();},true);
   const gifPicker=setupGifPicker(chat,{apiKey:gifApiKey});
   document.getElementById('chat-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;document.getElementById('chat-error').textContent='';try{const data=new FormData(f);const next=await api('room',{action:'chat',roomId:state.room.id,text:data.get('text'),gif:data.get('gif')});f.reset();gifPicker.clear();receiveState(next);render();}catch(e){document.getElementById('chat-error').textContent=e.message;}finally{b.disabled=false;}};
   await poll();setInterval(poll,1200);setInterval(tick,250);
@@ -136,9 +148,16 @@ function renderChat(room){
  const chat=document.getElementById('room-chat');if(!chat)return;
  chat.hidden=currentView!=='room'||!room||['closed','completed'].includes(room.phase)||(!room.members.some(m=>m.id===user.id)&&room.administratorId!==user.id);
  const key=JSON.stringify([room?.id,room?.chat]);if(key===chatLayout)return;chatLayout=key;
- const list=document.getElementById('chat-messages');const bottom=list.scrollHeight-list.scrollTop-list.clientHeight<60;
+ const list=document.getElementById('chat-messages');const bottom=list.followLatest!==false;
+ const sameSession=list.sessionId===room?.id,previousIds=new Set(list.messageIds||[]);
+ const messages=room?.chat||[];const added=sameSession?messages.filter(m=>!previousIds.has(m.id)).length:0;
+ if(!sameSession){list.unreadCount=0;list.followLatest=true;}
+ list.sessionId=room?.id;list.messageIds=messages.map(m=>m.id);
+ const oldScroll=list.scrollTop;
  list.innerHTML=(room?.chat||[]).map(m=>`<article><header class="chat-author">${avatar(m.photoUrl,m.name)}<strong>${esc(m.name)}</strong><time>${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time></header><p>${esc(m.text)}</p>${m.gif?`<img src="${esc(m.gif)}" alt="GIF enviado por ${esc(m.name)}" loading="lazy" referrerpolicy="no-referrer">`:''}</article>`).join('')||'<p>Comece a conversa.</p>';
- if(bottom)list.scrollTop=list.scrollHeight;
+ const latest=document.getElementById('chat-latest');
+ if(bottom||!sameSession){list.scrollTop=list.scrollHeight;list.unreadCount=0;latest.hidden=true;}
+ else{list.scrollTop=oldScroll;list.unreadCount=(list.unreadCount||0)+added;latest.hidden=false;latest.textContent=list.unreadCount?'↓ Novas mensagens ('+list.unreadCount+')':'↓ Ir para a última mensagem';if(added)document.getElementById('chat-unread-status').textContent=list.unreadCount+' novas mensagens no chat';}
 }
 function render(){
   meetingSound.update(state.room,(!!state.room?.members.some(m=>m.id===user.id)||state.room?.administrator?.id===user.id)&&(!['completed','closed'].includes(state.room.phase)||endingRoom===state.room.id));
