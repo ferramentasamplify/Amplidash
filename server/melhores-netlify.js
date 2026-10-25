@@ -27,5 +27,6 @@ export async function serve(request, handler, methods = ['GET', 'POST']) {
       console.error('[blobs-context-keys] ' + JSON.stringify(keys));
     } catch { console.error('[blobs-context] unavailable'); }
   }
+  if (/(?:\/auth|melhores-auth)$/.test(new URL(request.url).pathname) && response.body?.ok) response.body.gifApiKey=process.env.VITE_GIPHY_API_KEY||'';
   return new Response(JSON.stringify(response.body), { status: response.status, headers: response.headers });
 }

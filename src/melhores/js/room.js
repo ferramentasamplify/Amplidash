@@ -16,7 +16,7 @@ const initials=name=>{const parts=String(name||'').trim().split(/\s+/);return (p
 const avatar=(url,name)=>`<span class="member-portrait">${photo(url)||`<span>${esc(initials(name))}</span>`}</span>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user, state, layout, roomId, offset = 0, dirty = false, timer, polling = false, actionPending = false, saving = Promise.resolve();
-let draftRevision = 0;
+let draftRevision = 0, gifApiKey='';
 let currentView='profile',profileLayout='',lastVotePhase='',lastEnding='',endingRoom=null;
 let previousRoom=null,actionRevision=0,voteLayout='',chatLayout='',turnKey='';
 function changeView(view){
@@ -105,7 +105,7 @@ async function shell() {
   const emojis=document.getElementById('emoji-picker');emojis.innerHTML=['😊','😂','❤️','👏','🔥','🎉','😢','🙌','👀','⚽','🏆','🤔'].map(emoji=>`<button type="button" data-emoji="${emoji}" aria-label="${emoji}">${emoji}</button>`).join('');
   document.getElementById('chat-emoji').onclick=()=>{emojis.hidden=!emojis.hidden;document.getElementById('chat-emoji').setAttribute('aria-expanded',String(!emojis.hidden));};
   emojis.onclick=e=>{const b=e.target.closest('[data-emoji]');if(b){chat.querySelector('[name=text]').value+=' '+b.dataset.emoji;chat.querySelector('[name=text]').focus();}};
-  const gifPicker=setupGifPicker(chat);
+  const gifPicker=setupGifPicker(chat,{apiKey:gifApiKey});
   document.getElementById('chat-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('[type=submit]');b.disabled=true;document.getElementById('chat-error').textContent='';try{const data=new FormData(f);const next=await api('room',{action:'chat',roomId:state.room.id,text:data.get('text'),gif:data.get('gif')});f.reset();gifPicker.clear();receiveState(next);render();}catch(e){document.getElementById('chat-error').textContent=e.message;}finally{b.disabled=false;}};
   await poll();setInterval(poll,1200);setInterval(tick,250);
 }
@@ -286,5 +286,5 @@ function tick(){
   document.getElementById('room-clock-hint').textContent=seconds===0?'Tempo esgotado! Continue escrevendo; o administrador pode prolongar.':seconds<=60?'Reta final! Organize seu melhor e seu pior momento.':'Você tem 5 minutos para contar o melhor e o pior da semana.';
 }
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
-async function initialize(){try{const auth=await api('auth');user=auth.user;if(user)await shell();else login();}catch(e){login();error(e.message);}}
+async function initialize(){try{const auth=await api('auth');gifApiKey=auth.gifApiKey||'';user=auth.user;if(user)await shell();else login();}catch(e){login();error(e.message);}}
 initialize();
