@@ -509,3 +509,21 @@ test('chat photos come from participant profiles, including old messages, not cl
  for(const message of r.body.room.chat)assert.equal(message.photoUrl,'https://example.com/ana.jpg');
  assert.equal((await store.get('room-chat/photos'))[1].photoUrl,undefined);
 });
+
+test('closed session clears participant chat and archives full transcript only for admin',async()=>{
+ const {adminRequest}=await import('../server/melhores-admin.js');
+ const store=new Store(),admin=await login(store,'alexandre-neto'),ana=await login(store,'ana');
+ await store.setJSON('active-room',{id:'archive',phase:'waiting',testMode:true,administratorId:'alexandre-neto',members:['ana'],votes:{best:{},worst:{}},results:{}});
+ const messages=Array.from({length:160},(_,i)=>({id:String(i),userId:'ana',name:'Ana',text:'Mensagem '+i,at:i+1}));
+ await store.setJSON('room-chat/archive',messages);
+ let r=await roomRequest(request(admin,{action:'close',roomId:'archive'}),{store,game});assert.equal(r.status,200);assert.deepEqual(r.body.room.chat,[]);
+ r=await roomRequest(request(ana,null,'GET'),{store,game});assert.deepEqual(r.body.room.chat,[]);
+ const options={store,gameStore:new Store()};
+ assert.equal((await adminRequest(request(ana,{action:'chat-reports'}),options)).status,403);
+ assert.equal((await adminRequest(request('',{action:'chat-reports',roomId:'archive'}),options)).status,401);
+ r=await adminRequest(request(admin,{action:'chat-reports'}),options);assert.equal(r.body.sessions.length,1);assert.equal(r.body.sessions[0].count,160);
+ r=await adminRequest(request(admin,{action:'chat-reports',roomId:'archive'}),options);assert.equal(r.body.report.messages.length,160);
+ assert.equal((await adminRequest(request(admin,{action:'chat-reports',roomId:'other'}),options)).status,404);
+ await roomRequest(request(admin,{action:'create'}),{store,game});
+ r=await adminRequest(request(admin,{action:'chat-reports',roomId:'archive'}),options);assert.equal(r.body.report.messages[0].text,'Mensagem 0');
+});

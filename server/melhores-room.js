@@ -1,3 +1,4 @@
+import { archiveRoomChat } from './melhores-chat-reports.js';
 import { syncSheetGoals } from './melhores-sheet.js';
 import { personalProfile } from './melhores-profile.js';
 import { randomBytes } from 'node:crypto';
@@ -56,7 +57,7 @@ export async function roomRequest(request, deps = {}) {
           if(url.protocol!=='https:'||!['media.giphy.com','i.giphy.com','media.tenor.com'].includes(url.hostname)||!url.pathname.toLowerCase().endsWith('.gif')||url.username||url.password||url.port)fail('Use um link direto HTTPS de GIF do Giphy ou Tenor.');}
         await update(store,'room-chat/'+room.id,old=>{const messages=old||[];
           if(messages.some(m=>m.userId===user.id&&m.at>Date.now()-1500))fail('Aguarde um instante antes de enviar outra mensagem.',429);
-          return [...messages,{id:randomBytes(12).toString('hex'),userId:user.id,name:user.name,text,gif,at:Date.now()}].slice(-150);
+          return [...messages,{id:randomBytes(12).toString('hex'),userId:user.id,name:user.name,text,gif,at:Date.now()}];
         });
       } else if (action === 'save') {
         const room = await store.get('active-room', { type: 'json' });
@@ -242,10 +243,11 @@ export async function roomRequest(request, deps = {}) {
       return { id, name: participant?.name || account?.name || 'Participante', photoUrl: participant?.photoUrl || '', online: !!seen && seen.seen > Date.now()-20000, done: !!draft?.done, ...(goalsVisible ? {objectives:participant?.objectives || {}} : {}),
         ...(user.role === 'admin' || id === user.id || revealed ? { draft: draft || { best: '', worst: '', done: false, revision: 0 } } : {}) };
     }));
+    if (['completed','closed'].includes(room.phase)) await archiveRoomChat(store,room);
     // Raw ballots are never returned, even to the administrator. Results appear only after all votes.
     const {votes, ...publicRoom} = room;
-    const messages=room.members.includes(user.id)||room.administratorId===user.id?await store.get('room-chat/'+room.id,{type:'json'})||[]:[];
-    const chat=messages.map(message=>{
+    const messages=!['completed','closed'].includes(room.phase)&&(room.members.includes(user.id)||room.administratorId===user.id)?await store.get('room-chat/'+room.id,{type:'json'})||[]:[];
+    const chat=messages.slice(-150).map(message=>{
       const account=accounts.find(a=>a.id===message.userId);
       const participant=(game.participants||[]).find(p=>p.id===(account?.participantId||message.userId));
       return {...message,photoUrl:participant?.photoUrl||''};

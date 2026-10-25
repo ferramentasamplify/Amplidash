@@ -11,6 +11,13 @@ export async function adminRequest(request,deps={}){
   const denied=await requireAdmin(request,accountsStore);if(denied)return denied;
   const gameStore=deps.gameStore||getStore({name:'melhores-game',consistency:'strong'});
   const body=request.body||{};
+  if(request.method==='POST'&&body.action==='chat-reports'){
+   const sessions=await accountsStore.get('chat-report-index',{type:'json'})||[];
+   if(!body.roomId)return json({ok:true,sessions});
+   if(!sessions.some(s=>s.id===body.roomId))return json({ok:false,error:'Relatório não encontrado.'},404);
+   const report=await accountsStore.get('chat-reports/'+body.roomId,{type:'json'});
+   return report?json({ok:true,report}):json({ok:false,error:'Relatório não encontrado.'},404);
+  }
   if(request.method==='POST'){
    if(body.action==='reveal-password'){
     const signed=await authenticate(request,accountsStore);
