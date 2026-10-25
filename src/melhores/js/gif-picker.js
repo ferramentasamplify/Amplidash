@@ -24,7 +24,7 @@ export function setupGifPicker(chat,{apiKey=import.meta.env.VITE_GIPHY_API_KEY||
       const response=await fetch('https://api.giphy.com/v1/gifs/search?'+params,{signal:controller.signal,referrerPolicy:'no-referrer'});
       if(!response.ok)throw new Error('provider');
       const data=await response.json();if(current!==revision)return;
-      const items=(data.data||[]).map(item=>({title:item.title||term,url:item.images?.fixed_height?.url||item.images?.original?.url})).filter(item=>directGif(item.url));
+      const items=(data.data||[]).map(item=>({title:item.title||term,url:/^[A-Za-z0-9]+$/.test(item.id||'')?`https://media.giphy.com/media/${item.id}/giphy.gif`:''})).filter(item=>directGif(item.url));
       render(items);status.textContent=items.length?'Escolha um GIF para anexar.':'Nenhum GIF encontrado. Tente outra palavra.';
     }catch(error){if(error.name!=='AbortError'&&current===revision)status.textContent='Não foi possível buscar GIFs agora. Tente novamente.';}
   }
