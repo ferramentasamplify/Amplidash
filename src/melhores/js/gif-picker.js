@@ -4,7 +4,10 @@ const directGif = value => {
 };
 const favorites=[['Comemorar','g9582DNuQppxC'],['Aplausos','l3q2XhfQ8oCkm1Ts4'],['Risada','10JhviFuU2gWD6'],['Surpresa','5VKbvrjxpVJCM']].map(([title,id])=>({title,url:`https://media.giphy.com/media/${id}/giphy.gif`}));
 
-export function setupGifPicker(chat,{apiKey=import.meta.env.VITE_GIPHY_API_KEY||''}={}) {
+// GIPHY browser integration key: public by design, not an authentication secret.
+const browserKey='YT4dg2lWd5htFlHfH2kXNtitIvHOQvxU';
+export function setupGifPicker(chat,{apiKey=import.meta.env.VITE_GIPHY_API_KEY||browserKey}={}) {
+  apiKey=apiKey||browserKey;
   const picker=chat.querySelector('#gif-picker'),toggle=chat.querySelector('#gif-toggle'),selection=chat.querySelector('#gif-selection'),field=chat.querySelector('[name=gif]');
   picker.innerHTML='<label for="gif-query">Buscar GIFs</label><div class="gif-search-row"><input id="gif-query" type="search" maxlength="80" placeholder="Ex.: aplausos, risada, futebol" autocomplete="off"><button type="button" id="gif-search">Buscar</button></div><p class="gif-status" role="status" aria-live="polite"></p><div class="gif-results"></div><a class="gif-attribution" href="https://giphy.com/" target="_blank" rel="noopener noreferrer">Powered by GIPHY</a>';
   const query=picker.querySelector('input'),status=picker.querySelector('.gif-status'),results=picker.querySelector('.gif-results');
