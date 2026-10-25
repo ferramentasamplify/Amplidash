@@ -35,7 +35,7 @@ export function setupGifPicker(chat,{apiKey=import.meta.env.VITE_GIPHY_API_KEY||
   picker.addEventListener('click',event=>{
     const button=event.target.closest('[data-gif]');if(!button)return;
     field.value=button.dataset.gif;selection.hidden=false;
-    selection.innerHTML=`<img src="${escape(field.value)}" alt="GIF selecionado"><button type="button">Remover GIF</button>`;
+    selection.innerHTML=`<img src="${escape(field.value)}" alt="GIF selecionado"><button type="button" aria-label="Remover GIF" title="Remover GIF">×</button>`;
     selection.querySelector('button').onclick=clear;
     picker.hidden=true;toggle.setAttribute('aria-expanded','false');chat.querySelector('[name=text]').focus();
   });
